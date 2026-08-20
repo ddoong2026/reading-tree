@@ -39,21 +39,22 @@ const GameWorld: React.FC = () => {
 
   const petsList = React.useMemo(() => {
     const pets: React.ReactNode[] = [];
-    const petTypes: Array<'dog' | 'pig' | 'sheep'> = ['dog', 'pig', 'sheep'];
+    const petTypes: Array<string> = ['Meshy_AI_Character_output (1)'];
     
     // WebGL Context Lost(메모리 초과) 에러를 막기 위해 마릿수를 극단적으로 줄입니다.
-    // 3D 모델 파일들의 용량이나 폴리곤이 웹 브라우저가 감당하기엔 너무 무거운 상태입니다.
     let count = 1; // 기본 (1반)
     if (classId === 'class-2') count = 2;
     if (classId === 'class-3') count = 1;
 
     for (let i = 0; i < count; i++) {
       const type = petTypes[Math.floor(Math.random() * petTypes.length)];
-      // 눈에 잘 띄도록 반경을 조금 좁히고 랜덤 생성
+      
+      const charX = 0;
+      const charZ = 8;
       const angle = Math.random() * Math.PI * 2;
-      const radius = 8 + Math.random() * 15;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+      const radius = 2 + Math.random() * 4;
+      const x = charX + Math.cos(angle) * radius;
+      const z = charZ + Math.sin(angle) * radius;
       
       pets.push(<PetModel key={i} type={type} initialPosition={[x, 0, z]} />);
     }

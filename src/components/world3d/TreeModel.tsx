@@ -6,15 +6,17 @@ import { useNavigate } from 'react-router-dom';
 interface TreeModelProps {
   position?: [number, number, number];
   scale?: number;
+  disableMenu?: boolean;
 }
 
-export const TreeModel: React.FC<TreeModelProps> = ({ position = [0, 0, 0], scale = 25 }) => {
+export const TreeModel: React.FC<TreeModelProps> = ({ position = [0, 0, 0], scale = 25, disableMenu = false }) => {
   // tree4.glb 파일을 로드합니다.
   const { scene } = useGLTF('/tree4.glb');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleTreeClick = (e: ThreeEvent<MouseEvent>) => {
+    if (disableMenu) return; // 비활성화 상태면 이벤트를 막지 않고 부모(부유섬)로 통과시킴
     e.stopPropagation(); // 클릭 이벤트가 땅(바닥)으로 전달되지 않게 차단
     setIsMenuOpen(!isMenuOpen);
   };

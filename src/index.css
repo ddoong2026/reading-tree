@@ -1,9 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
 @import "tailwindcss";
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  font-family: 'Jua', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+@layer utilities {
+  .glass-panel {
+    background-color: rgb(255 255 255 / 0.4);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgb(255 255 255 / 0.6);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  }
+  
+  .glass-panel-hover:hover {
+    background-color: rgb(255 255 255 / 0.6);
+    box-shadow: 0 12px 48px 0 rgba(31, 38, 135, 0.25);
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+}
+
+/* 둥둥 떠다니는 애니메이션 */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+.animate-float-delayed {
+  animation: float 4s ease-in-out infinite;
+  animation-delay: 2s;
 }
 
 body {
