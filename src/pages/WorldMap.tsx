@@ -92,7 +92,7 @@ const FloatingIsland: React.FC<FloatingIslandProps> = ({ position, cls, onClick,
             className={`transition-all duration-300 pointer-events-none whitespace-nowrap ${isHovered ? 'scale-110' : 'scale-100'}`}
           >
             <div className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full shadow-lg border-2 border-sky-200 text-center">
-              <h3 className="text-2xl font-bold text-gray-800">{cls.name} 나무</h3>
+              <h3 className="text-2xl font-bold text-gray-800">{cls.name} 독서 나무</h3>
               <p className="text-lg text-sky-600 font-bold mt-1">Lv. {cls.treeLevel}</p>
             </div>
             {isHovered && (
@@ -147,7 +147,7 @@ const WorldMap: React.FC = () => {
       {/* 3D 캔버스 배경 */}
       <Canvas 
         shadows 
-        camera={{ position: [0, 50, 80], fov: 45 }}
+        camera={{ position: [0, 120, 30], fov: 45 }}
       >
         <Suspense fallback={null}>
           <Environment preset="city" />
@@ -174,9 +174,9 @@ const WorldMap: React.FC = () => {
 
           {/* 배경을 장식하는 대형 고퀄리티 구름들 */}
           <Float speed={1} floatIntensity={2}>
-            <Cloud position={[-30, -15, -30]} opacity={0.5} speed={0.2} scale={8} color="#f0f8ff" />
-            <Cloud position={[30, -20, -15]} opacity={0.5} speed={0.2} scale={10} color="#f0f8ff" />
-            <Cloud position={[0, -25, 20]} opacity={0.5} speed={0.2} scale={8} color="#f0f8ff" />
+            <Cloud position={[-30, 15, -30]} opacity={0.5} speed={0.2} scale={8} color="#f0f8ff" />
+            <Cloud position={[30, 12, -15]} opacity={0.5} speed={0.2} scale={10} color="#f0f8ff" />
+            <Cloud position={[0, 18, 20]} opacity={0.5} speed={0.2} scale={8} color="#f0f8ff" />
           </Float>
 
           {/* 카메라 무빙 (트랜지션) */}
@@ -186,10 +186,10 @@ const WorldMap: React.FC = () => {
           {!targetIsland && (
             <OrbitControls 
               makeDefault 
-              minPolarAngle={Math.PI / 6} 
+              minPolarAngle={0} 
               maxPolarAngle={Math.PI / 2.5} 
               minDistance={20} 
-              maxDistance={150} 
+              maxDistance={180} 
             />
           )}
         </Suspense>

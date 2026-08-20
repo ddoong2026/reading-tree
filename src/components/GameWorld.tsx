@@ -30,6 +30,10 @@ const SimpleCloud = ({ position, scale = 1 }: { position: [number, number, numbe
 const GameWorld: React.FC = () => {
   const { classId } = useParams<{ classId: string }>();
   const [characterTarget, setCharacterTarget] = useState<THREE.Vector3 | null>(null);
+  
+  // 나무 레벨업 테스트용 상태 (초기값: 3반이면 1, 아니면 3)
+  const initialLevel = classId === 'class-3' ? 1 : 3;
+  const [treeLevel, setTreeLevel] = useState(initialLevel);
 
   // 바닥(땅) 클릭 핸들러
   const handleGroundClick = (event: ThreeEvent<PointerEvent>) => {
@@ -104,8 +108,6 @@ const GameWorld: React.FC = () => {
           <SimpleCloud position={[20, 25, -30]} scale={3} />
 
           {/* 에셋 렌더링 */}
-          {/* 나무 높이를 대폭 낮춰서 사람 키와 비슷하게 맞춤 */}
-          <TreeModel position={[0, 9, 0]} scale={12} />
           <CharacterModel targetPosition={characterTarget} />
           
           {/* 정상적인 펫 리스트 렌더링 */}
@@ -115,6 +117,9 @@ const GameWorld: React.FC = () => {
 
           {/* 바닥 잔디 주변 마법 효과 (반딧불이/포자 느낌) */}
           <Sparkles count={200} scale={40} size={4} speed={0.4} opacity={0.5} color="#b4f8c8" position={[0, 2, 0]} />
+
+          {/* 메인 거대한 나무 */}
+          <TreeModel position={[0, 0, 0]} level={treeLevel} />
 
           {/* 바닥 (클릭하여 캐릭터 이동) */}
           <mesh 
@@ -136,7 +141,7 @@ const GameWorld: React.FC = () => {
             minPolarAngle={0} 
             maxPolarAngle={Math.PI / 2} 
             minDistance={5} 
-            maxDistance={50} 
+            maxDistance={150} 
           />
         </Suspense>
       </Canvas>
@@ -150,11 +155,26 @@ const GameWorld: React.FC = () => {
           ← 숲(월드맵)으로
         </Link>
         <div className="px-6 py-2 bg-green-600 text-white font-black rounded-full shadow-lg border-2 border-green-400 text-lg">
-          {classId === 'class-1' ? '새싹 1반' : classId === 'class-2' ? '햇살 2반' : '푸른 3반'}의 3D 나무
+          {classId === 'class-1' ? '새싹 1반' : classId === 'class-2' ? '햇살 2반' : '푸른 3반'}의 독서 나무
         </div>
       </div>
 
       <div className="absolute top-6 right-6 z-10 flex gap-4">
+        {/* 레벨업 테스트용 버튼 */}
+        <button 
+          onClick={() => {
+            if (treeLevel < 3) setTreeLevel(prev => prev + 1);
+          }}
+          disabled={treeLevel >= 3}
+          className={`px-6 py-2 font-bold rounded-full shadow-md transition-all flex items-center gap-2 ${
+            treeLevel >= 3 
+              ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+              : 'bg-green-500 text-white hover:bg-green-600 hover:scale-105'
+          }`}
+        >
+          <span>⬆️</span> 나무 레벨업 (테스트)
+        </button>
+
         <Link 
           to="/student" 
           className="px-6 py-2 bg-blue-500 text-white font-bold rounded-full shadow-md hover:bg-blue-600 transition-all"
