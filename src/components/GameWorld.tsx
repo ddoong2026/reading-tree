@@ -1,7 +1,7 @@
 import React, { useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, ContactShadows, Sparkles } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Sparkles, Instances, Instance } from '@react-three/drei';
 import { Link, useParams } from 'react-router-dom';
 import * as THREE from 'three';
 
@@ -68,9 +68,9 @@ const GameWorld: React.FC = () => {
   // 디버깅용 로그
   console.log("Spawning pets count:", petsList.length);
 
-  // 바닥에 깔릴 잔디(풀) 모형들 생성
-  const grassList = React.useMemo(() => {
-    const grasses: React.ReactNode[] = [];
+  // 바닥에 깔릴 잔디(풀) 모형들 생성 (Instancing용 데이터로 최적화)
+  const grassData = React.useMemo(() => {
+    const data: { position: [number, number, number], scaleY: number }[] = [];
     for (let i = 0; i < 50; i++) {
       const angle = Math.random() * Math.PI * 2;
       const radius = 5 + Math.random() * 35;
@@ -78,20 +78,15 @@ const GameWorld: React.FC = () => {
       const z = Math.sin(angle) * radius;
       const scaleY = 0.5 + Math.random() * 1.5;
       
-      grasses.push(
-        <mesh key={`grass-${i}`} position={[x, scaleY / 2, z]} castShadow receiveShadow>
-          <boxGeometry args={[0.2, scaleY, 0.2]} />
-          <meshStandardMaterial color="#66b032" />
-        </mesh>
-      );
+      data.push({ position: [x, scaleY / 2, z], scaleY });
     }
-    return grasses;
+    return data;
   }, []);
 
   return (
     <div className="relative w-full h-screen bg-sky-200 overflow-hidden">
-      {/* 3D 캔버스 영역 */}
-      <Canvas shadows camera={{ position: [0, 8, 18], fov: 45 }}>
+      {/* 3D 캔버스 영역 (해상도 타협으로 저사양 기기 최적화) */}
+      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 8, 18], fov: 45 }}>
         <Suspense fallback={null}>
           {/* 환경 빛 세팅 */}
           <ambientLight intensity={0.6} />
@@ -99,7 +94,7 @@ const GameWorld: React.FC = () => {
             castShadow 
             position={[10, 20, 10]} 
             intensity={1.2} 
-            shadow-mapSize={[2048, 2048]}
+            shadow-mapSize={[1024, 1024]}
           />
           
           {/* 하늘과 구름 세팅 (명확한 하늘색 바탕에 흰 구름) */}
@@ -113,10 +108,17 @@ const GameWorld: React.FC = () => {
           {/* 정상적인 펫 리스트 렌더링 */}
           {petsList}
           
-          {grassList}
+          {/* 1번의 드로우콜로 잔디 50개 렌더링 (그림자 생략) */}
+          <Instances limit={50} castShadow={false} receiveShadow={false}>
+            <boxGeometry args={[0.2, 1, 0.2]} />
+            <meshStandardMaterial color="#66b032" />
+            {grassData.map((data, i) => (
+              <Instance key={i} position={data.position} scale={[1, data.scaleY, 1]} />
+            ))}
+          </Instances>
 
-          {/* 바닥 잔디 주변 마법 효과 (반딧불이/포자 느낌) */}
-          <Sparkles count={200} scale={40} size={4} speed={0.4} opacity={0.5} color="#b4f8c8" position={[0, 2, 0]} />
+          {/* 바닥 잔디 주변 마법 효과 (개수 200->50 감소) */}
+          <Sparkles count={50} scale={40} size={4} speed={0.4} opacity={0.5} color="#b4f8c8" position={[0, 2, 0]} />
 
           {/* 메인 거대한 나무 */}
           <TreeModel position={[0, 0, 0]} level={treeLevel} />
@@ -132,8 +134,8 @@ const GameWorld: React.FC = () => {
             <meshStandardMaterial color="#a8d94e" roughness={0.8} />
           </mesh>
 
-          {/* 부드러운 그림자 효과 */}
-          <ContactShadows position={[0, -0.05, 0]} opacity={0.5} scale={40} blur={2} far={10} />
+          {/* 부드러운 그림자 효과 (해상도 256으로 고정) */}
+          <ContactShadows position={[0, -0.05, 0]} opacity={0.5} scale={40} blur={2} far={10} resolution={256} />
           
           {/* 카메라 컨트롤 */}
           <OrbitControls 
