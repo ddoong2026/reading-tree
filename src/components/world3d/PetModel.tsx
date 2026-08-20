@@ -14,7 +14,6 @@ export const PetModel: React.FC<PetModelProps> = ({ type, initialPosition }) => 
   const { scene, animations } = useGLTF(`/${type}.glb`);
   const { actions } = useAnimations(animations, group);
   
-  const [position, setPosition] = useState<[number, number, number]>(initialPosition);
   const [targetPos, setTargetPos] = useState<THREE.Vector3 | null>(null);
   const [isMoving, setIsMoving] = useState(false);
   const speed = 2.0;
@@ -62,7 +61,7 @@ export const PetModel: React.FC<PetModelProps> = ({ type, initialPosition }) => 
     return () => clearInterval(roamInterval);
   }, [type]);
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     if (!group.current || !targetPos) return;
 
     const currentPos = group.current.position;
@@ -81,7 +80,6 @@ export const PetModel: React.FC<PetModelProps> = ({ type, initialPosition }) => 
       
       group.current.rotation.y += normalizedDiff * 5 * delta;
       currentPos.add(direction.multiplyScalar(speed * delta));
-      setPosition([currentPos.x, currentPos.y, currentPos.z]);
     } else {
       setIsMoving(false);
       setTargetPos(null);
