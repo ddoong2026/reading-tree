@@ -39,7 +39,7 @@ ${hasImage ? "(참고: 학생이 글과 함께 정성스럽게 그린 그림도 
 말투는 반드시 "~했어요", "~해요" 같은 다정하고 부드러운 초등학교 선생님 말투로 작성해줘. 이모지는 절대로 사용하지 마.
 `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
