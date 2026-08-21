@@ -20,9 +20,14 @@ const Login: React.FC = () => {
     setLoading(true);
     setErrorMsg('');
 
-    // Supabase는 기본적으로 이메일 기반 인증을 사용하므로,
-    // 사용자가 입력한 아이디 뒤에 가상의 도메인을 붙여서 이메일 형태로 변환하여 로그인합니다.
-    const dummyEmail = `${userId}@dokseo.app`;
+    // 사용자가 실수로 공백이나 @dokseo.app을 붙여서 썼을 경우 방지
+    let cleanId = userId.trim().toLowerCase();
+    if (cleanId.includes('@')) {
+      cleanId = cleanId.split('@')[0];
+    }
+    
+    // Supabase에서 순수 숫자로만 이루어진 이메일(예: 1101@...)을 거부하는 현상 방지
+    const dummyEmail = /^\d+$/.test(cleanId) ? `s_${cleanId}@dokseo.app` : `${cleanId}@dokseo.app`;
 
     const { error } = await supabase.auth.signInWithPassword({
       email: dummyEmail,
@@ -30,7 +35,14 @@ const Login: React.FC = () => {
     });
 
     if (error) {
-      setErrorMsg('로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.');
+      console.error('Supabase Login Error:', error.message);
+      if (error.message.includes('Email not confirmed')) {
+        setErrorMsg('이메일 인증이 필요합니다. Supabase 설정에서 이메일 인증을 꺼주세요.');
+      } else if (error.message.includes('Invalid login credentials')) {
+        setErrorMsg('아이디 또는 비밀번호가 틀렸습니다.');
+      } else {
+        setErrorMsg(`로그인 실패: ${error.message}`);
+      }
       setLoading(false);
     } else {
       navigate(from, { replace: true });

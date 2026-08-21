@@ -56,7 +56,8 @@ const MainPage: React.FC = () => {
           </Link>
         )}
         <Link 
-          to="/map" 
+          to={session ? "/map" : "/login"}
+          state={!session ? { from: { pathname: '/map' } } : undefined}
           className="px-12 py-4 bg-[#fff8e7] text-[#78350f] rounded-full shadow-[0_8px_0_#d4b08c] hover:shadow-[0_4px_0_#d4b08c] hover:translate-y-[4px] transition-all font-black text-2xl border-4 border-[#d4b08c]"
         >
           시작하기
