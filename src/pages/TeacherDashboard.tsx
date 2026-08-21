@@ -154,11 +154,40 @@ const TeacherDashboard: React.FC = () => {
   todayStart.setHours(0, 0, 0, 0);
   const todayLogsCount = allLogs.filter(log => new Date(log.created_at) >= todayStart).length;
 
+  // API 모델 진단 함수
+  const checkApiModels = async () => {
+    const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!API_KEY || API_KEY === 'your_api_key_here') {
+      alert('Vercel에 VITE_GEMINI_API_KEY가 설정되어 있지 않습니다.');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
+      if (!response.ok) {
+        const err = await response.text();
+        alert(`API 키 권한 에러 (${response.status}):\n${err}`);
+        return;
+      }
+      const data = await response.json();
+      const modelNames = data.models.map((m: any) => m.name).join('\n');
+      alert(`사용 가능한 모델 목록:\n${modelNames}`);
+    } catch (error: any) {
+      alert(`통신 에러:\n${error.message}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-purple-50 p-8">
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-purple-900">선생님 대시보드</h1>
         <div className="flex gap-4 items-center">
+          <button 
+            onClick={checkApiModels}
+            className="px-4 py-2 bg-yellow-100 text-yellow-700 font-bold rounded-lg shadow-sm hover:bg-yellow-200 transition-colors text-sm"
+          >
+            API 진단
+          </button>
           <button onClick={fetchData} className="px-4 py-2 bg-purple-200 text-purple-800 rounded-lg hover:bg-purple-300 font-bold text-sm">
             🔄 새로고침
           </button>
