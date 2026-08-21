@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mic, Image as ImageIcon, Send, Volume2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import { generateReadingFeedback } from '../lib/geminiApi';
 
 const WriteLog: React.FC = () => {
   const [text, setText] = useState('');
@@ -38,8 +39,9 @@ const WriteLog: React.FC = () => {
     
     setIsSubmitting(true);
     
-    // 모의 AI 피드백
-    const aiResponse = '참 잘했어요! 글과 그림으로 책의 느낌을 멋지게 표현해주었네요. 앞으로도 독서오름나무와 함께 꾸준히 책을 읽어봐요! 🌳';
+    // 실제 AI 피드백 요청
+    const aiResult = await generateReadingFeedback(text, !!imageUrl);
+    const aiResponse = aiResult.feedbackText;
 
     const { error } = await supabase.from('reading_logs').insert({
       user_id: user.id,
