@@ -1,7 +1,7 @@
 import React, { useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, ContactShadows, Sparkles, Instances, Instance } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Instances, Instance } from '@react-three/drei';
 import { Link, useParams } from 'react-router-dom';
 import * as THREE from 'three';
 
@@ -34,7 +34,7 @@ const GameWorld: React.FC = () => {
   
   // 나무 레벨업 테스트용 상태
   const initialLevel = classId === 'class-3' ? 1 : 3;
-  const [treeLevel, setTreeLevel] = useState(initialLevel);
+  const [treeLevel] = useState(initialLevel);
 
   // 바닥(땅) 클릭 핸들러
   const handleGroundClick = (event: ThreeEvent<PointerEvent>) => {
