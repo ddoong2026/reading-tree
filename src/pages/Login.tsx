@@ -29,7 +29,7 @@ const Login: React.FC = () => {
     // Supabase에서 순수 숫자로만 이루어진 이메일(예: 1101@...)을 거부하는 현상 방지
     const dummyEmail = /^\d+$/.test(cleanId) ? `s_${cleanId}@dokseo.app` : `${cleanId}@dokseo.app`;
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
       email: dummyEmail,
       password,
     });
@@ -44,7 +44,21 @@ const Login: React.FC = () => {
         setErrorMsg(`로그인 실패: ${error.message}`);
       }
       setLoading(false);
-    } else {
+    } else if (authData?.user) {
+      // Supabase Auth에는 남아있지만 public.users (선생님 대시보드)에서 삭제된 계정인지 확인
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (userError || !userData) {
+        await supabase.auth.signOut(); // 강제 로그아웃
+        setErrorMsg('삭제되었거나 유효하지 않은 계정입니다.');
+        setLoading(false);
+        return;
+      }
+
       navigate(from, { replace: true });
     }
   };
