@@ -1,8 +1,4 @@
-/**
- * 더미 Gemini AI API 연동 모듈 (Phase 1 용)
- * 실제 구동을 위해서는 Google Gemini API Key가 필요하며,
- * 백엔드(Supabase Edge Functions 등)를 경유하여 호출하는 것을 권장합니다.
- */
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -17,7 +13,6 @@ export const generateReadingFeedback = async (
 ): Promise<AIFeedbackResponse> => {
   
   if (!API_KEY || API_KEY === 'your_api_key_here') {
-    console.error("Gemini API Key is missing!");
     return { 
       feedbackText: "선생님, Vercel 환경변수나 .env 파일에 VITE_GEMINI_API_KEY를 설정해주세요! 🌳", 
       success: false 
@@ -39,23 +34,13 @@ ${hasImage ? "(참고: 학생이 글과 함께 정성스럽게 그린 그림도 
 말투는 반드시 "~했어요", "~해요" 같은 다정하고 부드러운 초등학교 선생님 말투로 작성해줘. 이모지는 절대로 사용하지 마.
 `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }]
-      })
-    });
+    // Google Generative AI 공식 SDK 사용
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`[${response.status}] ${errorText}`);
-    }
-
-    const data = await response.json();
-    const feedbackText = data.candidates[0].content.parts[0].text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const feedbackText = response.text();
     
     return { feedbackText, success: true };
   } catch (error: any) {
