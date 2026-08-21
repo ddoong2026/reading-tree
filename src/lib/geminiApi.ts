@@ -50,17 +50,18 @@ ${hasImage ? "(참고: 학생이 글과 함께 정성스럽게 그린 그림도 
     });
     
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`[${response.status}] ${errorText}`);
     }
 
     const data = await response.json();
     const feedbackText = data.candidates[0].content.parts[0].text;
     
     return { feedbackText, success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI feedback error:", error);
     return { 
-      feedbackText: "앗, 마법의 숲 통신망에 잠시 문제가 생겼나 봐요. 조금 뒤에 다시 시도해주세요! 🍃", 
+      feedbackText: `에러 발생: ${error.message} (선생님께 이 메시지를 알려주세요!)`, 
       success: false 
     };
   }
