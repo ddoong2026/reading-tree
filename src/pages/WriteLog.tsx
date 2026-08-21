@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mic, Image as ImageIcon, Send, Volume2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 const WriteLog: React.FC = () => {
   const [text, setText] = useState('');
+  const [bookTitle, setBookTitle] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { user } = useAuth();
 
   // STT 더미 핸들러
   const handleToggleRecord = () => {
@@ -26,12 +32,31 @@ const WriteLog: React.FC = () => {
     setImageUrl('https://via.placeholder.com/400x300?text=Uploaded+Drawing');
   };
 
-  // 제출 및 더미 AI 피드백
-  const handleSubmit = () => {
-    if (!text && !imageUrl) return;
+  // 제출 및 DB 연동
+  const handleSubmit = async () => {
+    if (!bookTitle || (!text && !imageUrl) || !user) return;
+    
+    setIsSubmitting(true);
     
     // 모의 AI 피드백
-    setFeedback('참 잘했어요! 글과 그림으로 책의 느낌을 멋지게 표현해주었네요. 앞으로도 독서오름나무와 함께 꾸준히 책을 읽어봐요! 🌳');
+    const aiResponse = '참 잘했어요! 글과 그림으로 책의 느낌을 멋지게 표현해주었네요. 앞으로도 독서오름나무와 함께 꾸준히 책을 읽어봐요! 🌳';
+
+    const { error } = await supabase.from('reading_logs').insert({
+      user_id: user.id,
+      book_title: bookTitle,
+      text_content: text,
+      image_url: imageUrl,
+      ai_feedback: aiResponse
+    });
+
+    setIsSubmitting(false);
+
+    if (error) {
+      alert('독서록 저장 중 오류가 발생했습니다.');
+      console.error(error);
+    } else {
+      setFeedback(aiResponse);
+    }
   };
 
   // TTS 더미 핸들러
@@ -56,6 +81,8 @@ const WriteLog: React.FC = () => {
             <label className="block text-gray-700 font-semibold mb-2">어떤 책을 읽었나요?</label>
             <input 
               type="text" 
+              value={bookTitle}
+              onChange={(e) => setBookTitle(e.target.value)}
               placeholder="책 제목을 적어주세요"
               className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-400"
             />
@@ -108,10 +135,11 @@ const WriteLog: React.FC = () => {
 
           <button 
             onClick={handleSubmit}
-            className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-2xl shadow-md flex justify-center items-center gap-2 transition-colors text-lg"
+            disabled={isSubmitting || !bookTitle || (!text && !imageUrl)}
+            className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-2xl shadow-md flex justify-center items-center gap-2 transition-colors text-lg disabled:opacity-50"
           >
             <Send size={20} />
-            다 썼어요! (제출하기)
+            {isSubmitting ? '저장 중...' : '다 썼어요! (제출하기)'}
           </button>
         </div>
 
