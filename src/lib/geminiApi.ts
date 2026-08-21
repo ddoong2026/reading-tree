@@ -36,7 +36,7 @@ ${hasImage ? "(참고: 학생이 글과 함께 정성스럽게 그린 그림도 
 
     // Google Generative AI 공식 SDK 사용
     const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
