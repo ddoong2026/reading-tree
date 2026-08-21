@@ -105,7 +105,7 @@ const TeacherDashboard: React.FC = () => {
 
         // 이미 Auth에 가입되어 있으나 public.users에서만 삭제된 경우 복구 시도
         if (authError && authError.message.includes('User already registered')) {
-          const { data: loginData, error: loginError } = await supabaseAdmin.auth.signInWithPassword({
+          const { data: loginData } = await supabaseAdmin.auth.signInWithPassword({
             email,
             password: batchPassword,
           });
