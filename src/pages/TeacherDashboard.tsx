@@ -101,12 +101,27 @@ const TeacherDashboard: React.FC = () => {
           password: batchPassword,
         });
 
-        if (authError || !authData.user) {
+        let userId = authData?.user?.id;
+
+        // 이미 Auth에 가입되어 있으나 public.users에서만 삭제된 경우 복구 시도
+        if (authError && authError.message.includes('User already registered')) {
+          const { data: loginData, error: loginError } = await supabaseAdmin.auth.signInWithPassword({
+            email,
+            password: batchPassword,
+          });
+          
+          if (loginData?.user) {
+            userId = loginData.user.id;
+          } else {
+            throw new Error('이미 존재하는 아이디입니다. (완전히 삭제하려면 Supabase 대시보드의 Authentication -> Users에서 삭제해야 합니다)');
+          }
+        } else if (authError || !userId) {
           throw new Error(authError?.message || "Auth 계정 생성 실패");
         }
 
-        const { error: dbError } = await supabase.from('users').insert({
-          id: authData.user.id,
+        // upsert를 사용하여 이미 있더라도 덮어쓰거나 복구함
+        const { error: dbError } = await supabase.from('users').upsert({
+          id: userId,
           role: 'student',
           name: name,
         });
@@ -115,13 +130,9 @@ const TeacherDashboard: React.FC = () => {
           throw new Error(dbError.message);
         }
 
-        newLogs[newLogs.length - 1] = `✅ 성공: [${id}] 계정이 생성되었습니다.`;
+        newLogs[newLogs.length - 1] = `✅ 성공: [${id}] 계정이 생성(또는 복구)되었습니다.`;
       } catch (error: any) {
-        let errorMsg = error.message;
-        if (errorMsg.includes('User already registered')) {
-          errorMsg = '이미 존재하는 아이디입니다.';
-        }
-        newLogs[newLogs.length - 1] = `❌ 실패: [${id}] - ${errorMsg}`;
+        newLogs[newLogs.length - 1] = `❌ 실패: [${id}] - ${error.message}`;
       }
 
       setBatchLogs([...newLogs]);
