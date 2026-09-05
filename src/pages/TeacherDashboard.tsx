@@ -81,7 +81,8 @@ const TeacherDashboard: React.FC = () => {
     setIsSavingPrompt(true);
     const { error } = await supabase
       .from('app_settings')
-      .upsert({ id: 'ai_prompt', value: aiPrompt });
+      .update({ value: aiPrompt })
+      .eq('id', 'ai_prompt');
     
     if (error) {
       alert('프롬프트 저장 중 오류가 발생했습니다.\n(SQL을 실행하여 테이블을 생성했는지 확인해주세요.)\n' + error.message);
