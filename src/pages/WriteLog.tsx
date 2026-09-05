@@ -3,14 +3,20 @@ import { Link } from 'react-router-dom';
 import { Mic, Image as ImageIcon, Send, Volume2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
-import { generateReadingFeedback } from '../lib/geminiApi';
+import { generateReadingFeedback, extractTextFromImage } from '../lib/geminiApi';
 
 const WriteLog: React.FC = () => {
   const [text, setText] = useState('');
   const [bookTitle, setBookTitle] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageType, setImageType] = useState<'drawing' | 'handwriting'>('drawing');
+  const [base64Image, setBase64Image] = useState<string | null>(null);
+  const [imageMimeType, setImageMimeType] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { user } = useAuth();
@@ -27,37 +33,96 @@ const WriteLog: React.FC = () => {
     }
   };
 
-  // 더미 이미지 업로드 핸들러
-  const handleImageUpload = () => {
-    // 실제 Supabase Storage 연동은 추후 구현
-    setImageUrl('https://via.placeholder.com/400x300?text=Uploaded+Drawing');
+  // 실제 이미지 업로드 핸들러
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      setImageMimeType(file.type);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setImagePreview(result);
+        setBase64Image(result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    setBase64Image(null);
+    setImageMimeType(null);
   };
 
   // 제출 및 DB 연동
   const handleSubmit = async () => {
-    if (!bookTitle || (!text && !imageUrl) || !user) return;
+    if (!bookTitle || (!text && !imageFile) || !user) return;
     
     setIsSubmitting(true);
-    
-    // 실제 AI 피드백 요청
-    const aiResult = await generateReadingFeedback(text, !!imageUrl);
-    const aiResponse = aiResult.feedbackText;
+    let finalContent = text;
+    let uploadedImageUrl = null;
 
-    const { error } = await supabase.from('reading_logs').insert({
-      user_id: user.id,
-      book_title: bookTitle,
-      text_content: text,
-      image_url: imageUrl,
-      ai_feedback: aiResponse
-    });
+    try {
+      // 1. 이미지가 있다면 Supabase Storage에 업로드
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${user.id}_${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
 
-    setIsSubmitting(false);
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('reading-log-images')
+          .upload(filePath, imageFile);
 
-    if (error) {
-      alert('독서록 저장 중 오류가 발생했습니다.');
-      console.error(error);
-    } else {
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          // 버킷이 없거나 권한이 없을 경우 임시로 더미 URL 사용 (로컬 테스트용)
+          uploadedImageUrl = 'https://via.placeholder.com/400x300?text=Upload+Failed+Dummy';
+        } else {
+          const { data: publicUrlData } = supabase.storage
+            .from('reading-log-images')
+            .getPublicUrl(filePath);
+          uploadedImageUrl = publicUrlData.publicUrl;
+        }
+      }
+
+      // 2. 손글씨인 경우 OCR 수행
+      if (imageType === 'handwriting' && base64Image && imageMimeType) {
+        try {
+          const ocrText = await extractTextFromImage(base64Image, imageMimeType);
+          finalContent = text ? `${text}\n\n[손글씨 내용]\n${ocrText}` : ocrText;
+          setText(finalContent); // 추출된 텍스트를 화면에 표시하여 수정 가능하게 함
+        } catch (ocrError) {
+          console.error('OCR Error:', ocrError);
+          alert('손글씨를 텍스트로 변환하는 데 실패했습니다. 다시 시도해주세요.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // 3. AI 피드백 요청 (최종 텍스트 기반)
+      const aiResult = await generateReadingFeedback(finalContent, !!uploadedImageUrl);
+      const aiResponse = aiResult.feedbackText;
+
+      // 4. DB 저장
+      const { error } = await supabase.from('reading_logs').insert({
+        user_id: user.id,
+        book_title: bookTitle,
+        text_content: finalContent,
+        image_url: uploadedImageUrl,
+        ai_feedback: aiResponse
+      });
+
+      if (error) throw error;
+      
       setFeedback(aiResponse);
+    } catch (error: any) {
+      alert('독서록 저장 중 오류가 발생했습니다: ' + error.message);
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -115,29 +180,60 @@ const WriteLog: React.FC = () => {
           </div>
 
           <div className="mb-8">
-            <label className="block text-gray-700 font-semibold mb-2">그림으로도 표현해볼까요? (선택)</label>
+            <div className="flex justify-between items-center mb-4">
+              <label className="block text-gray-700 font-semibold">사진도 같이 올릴까요? (선택)</label>
+              
+              {/* 이미지 타입 선택 UI */}
+              <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setImageType('drawing')}
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${
+                    imageType === 'drawing' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  🎨 그림
+                </button>
+                <button
+                  onClick={() => setImageType('handwriting')}
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${
+                    imageType === 'handwriting' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  ✍️ 손글씨
+                </button>
+              </div>
+            </div>
             
-            {imageUrl ? (
-              <div className="relative inline-block">
-                <img src={imageUrl} alt="Uploaded" className="rounded-xl max-w-full h-auto border-2 border-green-200" />
-                <button onClick={() => setImageUrl(null)} className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md text-red-500 hover:text-red-700">
+            {imageType === 'handwriting' && (
+              <p className="text-sm text-green-600 mb-3 bg-green-50 p-2 rounded-lg inline-block">
+                💡 손글씨를 사진으로 찍어 올리면, 제출할 때 AI 선생님이 글자로 읽어서 피드백을 해줄 거예요!
+              </p>
+            )}
+
+            {imagePreview ? (
+              <div className="relative inline-block mt-2">
+                <img src={imagePreview} alt="Uploaded" className="rounded-xl max-w-full h-auto max-h-64 border-2 border-green-200" />
+                <button onClick={removeImage} className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md text-red-500 hover:text-red-700">
                   ✕
                 </button>
               </div>
             ) : (
-              <button 
-                onClick={handleImageUpload}
-                className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors"
-              >
+              <label className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer mt-2">
                 <ImageIcon size={32} className="mb-2 text-gray-400" />
-                <span>직접 그린 그림 사진 올리기</span>
-              </button>
+                <span>카메라로 찍거나 앨범에서 사진 고르기</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleImageChange} 
+                />
+              </label>
             )}
           </div>
 
           <button 
             onClick={handleSubmit}
-            disabled={isSubmitting || !bookTitle || (!text && !imageUrl)}
+            disabled={isSubmitting || !bookTitle || (!text && !imageFile)}
             className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-2xl shadow-md flex justify-center items-center gap-2 transition-colors text-lg disabled:opacity-50"
           >
             <Send size={20} />

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, Float, Html, Cloud } from '@react-three/drei';
+import { OrbitControls, Environment, Float, Html, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { TreeModel } from '../components/world3d/TreeModel';
 
@@ -32,6 +32,24 @@ const CameraRig: React.FC<{ targetIsland: THREE.Vector3 | null, onReached: () =>
   return null;
 };
 
+// --- 심플 구름 장식 (최적화용) ---
+const SimpleCloud: React.FC<{ position: [number, number, number], scale?: number, opacity?: number }> = ({ position, scale = 1, opacity = 0.8 }) => (
+  <group position={position} scale={scale}>
+    <mesh position={[-1, 0, 0]}>
+      <sphereGeometry args={[1, 12, 12]} />
+      <meshStandardMaterial color="#ffffff" transparent opacity={opacity} roughness={1} flatShading />
+    </mesh>
+    <mesh position={[1, -0.2, 0]}>
+      <sphereGeometry args={[0.8, 12, 12]} />
+      <meshStandardMaterial color="#ffffff" transparent opacity={opacity} roughness={1} flatShading />
+    </mesh>
+    <mesh position={[0, 0.5, 0]}>
+      <sphereGeometry args={[1.2, 12, 12]} />
+      <meshStandardMaterial color="#ffffff" transparent opacity={opacity} roughness={1} flatShading />
+    </mesh>
+  </group>
+);
+
 // --- 부유섬 컴포넌트 ---
 interface FloatingIslandProps {
   position: [number, number, number];
@@ -48,62 +66,81 @@ const FloatingIsland: React.FC<FloatingIslandProps> = ({ position, cls, onClick,
   const groupRef = useRef<THREE.Group>(null);
 
   return (
-    <Float speed={isHovered ? 3 : 1.5} rotationIntensity={0.2} floatIntensity={0.5}>
-      <group 
-        ref={groupRef}
-        position={position} 
-        scale={islandScale}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (groupRef.current) {
-            const worldPos = new THREE.Vector3();
-            groupRef.current.getWorldPosition(worldPos);
-            onClick(cls, worldPos);
-          }
-        }}
-        onPointerOver={(e) => { e.stopPropagation(); setHovered(cls.id); }}
-        onPointerOut={() => setHovered(null)}
-      >
-        {/* 섬 바닥 (흙) */}
-        <mesh position={[0, -1, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[3.8, 1.5, 2, 8]} />
-          <meshStandardMaterial color="#8B4513" roughness={0.9} />
-        </mesh>
-        
-        {/* 섬 윗부분 (잔디) */}
-        <mesh position={[0, 0, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[4.2, 3.8, 0.5, 8]} />
-          <meshStandardMaterial color="#4CAF50" roughness={0.8} />
-        </mesh>
-        
-        {/* 고퀄리티 구름 장식 (섬 베이스 주위) */}
-        <group position={[0, -1.5, 0]}>
-          <Cloud opacity={0.8} speed={0.4} scale={2} color="#ffffff" />
-        </group>
+    <group position={position}>
+      <Float speed={isHovered ? 3 : 1.5} rotationIntensity={0.2} floatIntensity={0.5}>
+        <group 
+          ref={groupRef}
+          scale={islandScale}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (groupRef.current) {
+              const worldPos = new THREE.Vector3();
+              groupRef.current.getWorldPosition(worldPos);
+              onClick(cls, worldPos);
+            }
+          }}
+          onPointerOver={(e) => { e.stopPropagation(); setHovered(cls.id); }}
+          onPointerOut={() => setHovered(null)}
+        >
+          {/* 섬 바닥 (흙) */}
+          <mesh position={[0, -1, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[3.8, 1.5, 2, 8]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} flatShading />
+          </mesh>
+          
+          {/* 섬 윗부분 (잔디) */}
+          <mesh position={[0, 0, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[4.2, 3.8, 0.5, 8]} />
+            <meshStandardMaterial color="#4CAF50" roughness={0.8} flatShading />
+          </mesh>
+          
+          {/* 구름 장식 (최적화됨) */}
+          <SimpleCloud position={[0, -1.5, 0]} scale={1.5} opacity={0.6} />
 
-        {/* 나무 (레벨에 따른 크기) */}
-        <group position={[0, 0.25, 0]} scale={treeScale}>
-          <TreeModel disableMenu={true} />
+          {/* 나무 (레벨에 따른 크기) */}
+          <group position={[0, 0.25, 0]} scale={treeScale}>
+            <TreeModel disableMenu={true} />
+          </group>
         </group>
+      </Float>
 
-        {/* 반 이름 라벨 (HTML) */}
-        <Html position={[0, treeScale * 3.5 + 1.5, 0]} center zIndexRange={[100, 0]}>
-          <div 
-            className={`transition-all duration-300 pointer-events-none whitespace-nowrap ${isHovered ? 'scale-110' : 'scale-100'}`}
-          >
-            <div className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full shadow-lg border-2 border-sky-200 text-center">
-              <h3 className="text-2xl font-bold text-gray-800">{cls.name} 독서 나무</h3>
-              <p className="text-lg text-sky-600 font-bold mt-1">Lv. {cls.treeLevel}</p>
-            </div>
-            {isHovered && (
-              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-sky-500 text-white px-4 py-1 rounded-full font-bold shadow-md animate-bounce">
-                클릭해서 입장!
-              </div>
-            )}
+      {/* 반 이름 라벨 (HTML) - Float 바깥으로 분리하여 애니메이션 렉(DOM Reflow) 제거 */}
+      <Html position={[0, treeScale * 3.5 + 1.5, 0]} center zIndexRange={[100, 0]}>
+        <div 
+          className={`transition-all duration-300 pointer-events-none whitespace-nowrap ${isHovered ? 'scale-110' : 'scale-100'}`}
+        >
+          <div className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full shadow-lg border-2 border-sky-200 text-center">
+            <h3 className="text-2xl font-bold text-gray-800">{cls.name} 독서 나무</h3>
+            <p className="text-lg text-sky-600 font-bold mt-1">Lv. {cls.treeLevel}</p>
           </div>
-        </Html>
-      </group>
-    </Float>
+          {isHovered && (
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-sky-500 text-white px-4 py-1 rounded-full font-bold shadow-md animate-bounce">
+              클릭해서 입장!
+            </div>
+          )}
+        </div>
+      </Html>
+    </group>
+  );
+};
+
+// --- 로딩 화면 컴포넌트 ---
+const CanvasLoader = () => {
+  const { progress } = useProgress();
+  return (
+    <Html center zIndexRange={[1000, 0]}>
+      <div className="flex flex-col items-center justify-center p-8 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl min-w-[280px]">
+        <div className="text-5xl mb-4 animate-bounce">🌱</div>
+        <h2 className="text-2xl font-bold text-sky-800 mb-4">독서오름나무 숲 생성 중...</h2>
+        <div className="w-full bg-sky-100 rounded-full h-4 mb-2 overflow-hidden border border-sky-200">
+          <div 
+            className="bg-gradient-to-r from-sky-400 to-green-400 h-full transition-all duration-300 ease-out" 
+            style={{ width: `${Math.max(5, progress)}%` }}
+          ></div>
+        </div>
+        <p className="text-md font-bold text-sky-600">{progress.toFixed(0)}% 완료</p>
+      </div>
+    </Html>
   );
 };
 
@@ -149,7 +186,7 @@ const WorldMap: React.FC = () => {
         shadows 
         camera={{ position: [0, 120, 30], fov: 45 }}
       >
-        <Suspense fallback={null}>
+        <Suspense fallback={<CanvasLoader />}>
           <Environment preset="city" />
           
           <ambientLight intensity={0.6} />
@@ -172,11 +209,11 @@ const WorldMap: React.FC = () => {
             />
           ))}
 
-          {/* 배경을 장식하는 대형 고퀄리티 구름들 */}
+          {/* 배경을 장식하는 대형 최적화 구름들 */}
           <Float speed={1} floatIntensity={2}>
-            <Cloud position={[-30, 15, -30]} opacity={0.5} speed={0.2} scale={8} color="#f0f8ff" />
-            <Cloud position={[30, 12, -15]} opacity={0.5} speed={0.2} scale={10} color="#f0f8ff" />
-            <Cloud position={[0, 18, 20]} opacity={0.5} speed={0.2} scale={8} color="#f0f8ff" />
+            <SimpleCloud position={[-30, 15, -30]} scale={8} opacity={0.3} />
+            <SimpleCloud position={[30, 12, -15]} scale={10} opacity={0.3} />
+            <SimpleCloud position={[0, 18, 20]} scale={8} opacity={0.3} />
           </Float>
 
           {/* 카메라 무빙 (트랜지션) */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase, supabaseAdmin } from '../lib/supabaseClient';
+import { Trash2 } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -19,6 +20,7 @@ interface ReadingLog {
 }
 
 const TeacherDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [grade, setGrade] = useState('1');
   const [classNum, setClassNum] = useState('1');
   const [endNumber, setEndNumber] = useState('30');
@@ -32,6 +34,7 @@ const TeacherDashboard: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [allLogs, setAllLogs] = useState<ReadingLog[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
 
   // 데이터 불러오기
   const fetchData = async () => {
@@ -147,6 +150,52 @@ const TeacherDashboard: React.FC = () => {
     alert(
       `보안 정책상 웹에서 다른 사용자의 비밀번호를 강제로 변경할 수 없습니다.\n\n[초기화 방법]\n1. Supabase 관리자 대시보드 접속\n2. Authentication -> Users 메뉴 이동\n3. [${studentId}] 검색 후 우측 점 3개(메뉴) 클릭\n4. 'Reset Password' 또는 'Set Password' 클릭`
     );
+  };
+
+  const handleDeleteLog = async (id: string, title: string, studentName: string) => {
+    if (!window.confirm(`[${studentName}] 학생의 '${title}' 독서록을 삭제하시겠습니까?\n이 작업은 복구할 수 없습니다.`)) return;
+
+    const { data, error } = await supabase
+      .from('reading_logs')
+      .delete()
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Error deleting log:', error);
+      alert('삭제 실패: ' + error.message);
+    } else if (data && data.length === 0) {
+      alert('삭제 권한이 없거나 이미 삭제되었습니다.\n(Supabase에서 RLS DELETE 정책 설정을 확인해주세요)');
+    } else {
+      setAllLogs(allLogs.filter(log => log.id !== id));
+      alert('독서록이 삭제되었습니다.');
+    }
+  };
+
+  const handleBulkDeleteLogs = async () => {
+    if (selectedLogIds.length === 0) return;
+    if (!window.confirm(`선택한 ${selectedLogIds.length}개의 독서록을 삭제하시겠습니까?\n이 작업은 복구할 수 없습니다.`)) return;
+
+    const { data, error } = await supabase
+      .from('reading_logs')
+      .delete()
+      .in('id', selectedLogIds)
+      .select();
+
+    if (error) {
+      console.error('Error deleting logs:', error);
+      alert('일부 또는 전체 삭제 실패: ' + error.message);
+    } else if (data && data.length === 0) {
+      alert('삭제 권한이 없거나 이미 삭제되었습니다.\n(Supabase에서 RLS DELETE 정책 설정을 확인해주세요)');
+    } else {
+      setAllLogs(allLogs.filter(log => !selectedLogIds.includes(log.id)));
+      setSelectedLogIds([]);
+      alert(`${data?.length || selectedLogIds.length}개의 독서록이 삭제되었습니다.`);
+    }
+  };
+
+  const handleViewStudentDashboard = (student: Student) => {
+    navigate(`/student/${student.id}`);
   };
 
   // 통계 계산
@@ -339,7 +388,13 @@ const TeacherDashboard: React.FC = () => {
                     const studentLogsCount = allLogs.filter(log => log.user_id === student.id).length;
                     return (
                       <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-4 font-medium text-gray-800">{student.name}</td>
+                        <td 
+                          className="py-3 px-4 font-medium text-purple-600 cursor-pointer hover:underline"
+                          onClick={() => handleViewStudentDashboard(student)}
+                          title="학생 대시보드 열람"
+                        >
+                          {student.name}
+                        </td>
                         <td className="py-3 px-4 text-gray-500 text-sm">{new Date(student.created_at).toLocaleDateString()}</td>
                         <td className="py-3 px-4">
                           <span className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-bold">
@@ -365,26 +420,66 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-sm">
-        <h2 className="text-xl font-semibold mb-4 text-gray-800">전체 독서록 최신 목록</h2>
-        <div className="overflow-x-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">전체 독서록 최신 목록</h2>
+          {selectedLogIds.length > 0 && (
+            <button
+              onClick={handleBulkDeleteLogs}
+              className="px-4 py-2 bg-red-500 text-white font-bold rounded-lg shadow-sm hover:bg-red-600 transition-colors text-sm flex items-center gap-2"
+            >
+              <Trash2 size={16} />
+              선택 삭제 ({selectedLogIds.length})
+            </button>
+          )}
+        </div>
+        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b-2 border-gray-100">
+              <tr className="border-b-2 border-gray-100 sticky top-0 bg-white z-10 shadow-sm">
+                <th className="py-3 px-4 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                    checked={allLogs.length > 0 && selectedLogIds.length === allLogs.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedLogIds(allLogs.map(log => log.id));
+                      } else {
+                        setSelectedLogIds([]);
+                      }
+                    }}
+                  />
+                </th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">학생 (학번)</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">작성 일시</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">책 제목</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">형태</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">AI 피드백 요약</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold text-center">관리</th>
               </tr>
             </thead>
             <tbody>
               {loadingData ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
               ) : allLogs.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-500 italic">아직 작성된 독서록이 없습니다.</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-gray-500 italic">아직 작성된 독서록이 없습니다.</td></tr>
               ) : (
-                allLogs.slice(0, 10).map(log => (
-                  <tr key={log.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                allLogs.map(log => (
+                  <tr key={log.id} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedLogIds.includes(log.id) ? 'bg-purple-50/50' : ''}`}>
+                    <td className="py-3 px-4 text-center">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                        checked={selectedLogIds.includes(log.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedLogIds([...selectedLogIds, log.id]);
+                          } else {
+                            setSelectedLogIds(selectedLogIds.filter(id => id !== log.id));
+                          }
+                        }}
+                      />
+                    </td>
                     <td className="py-3 px-4 font-bold text-gray-800">{log.users?.name || '알 수 없음'}</td>
                     <td className="py-3 px-4 text-gray-500 text-sm">
                       {new Date(log.created_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -404,14 +499,20 @@ const TeacherDashboard: React.FC = () => {
                     <td className="py-3 px-4 text-sm text-gray-600 truncate max-w-[300px]" title={log.ai_feedback}>
                       {log.ai_feedback || '피드백 없음'}
                     </td>
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => handleDeleteLog(log.id, log.book_title, log.users?.name || '알 수 없음')}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors inline-flex justify-center"
+                        title="삭제하기"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
-          {allLogs.length > 10 && (
-            <div className="text-center mt-4 text-sm text-gray-400">최근 10개까지만 표시됩니다.</div>
-          )}
         </div>
       </div>
     </div>

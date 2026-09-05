@@ -49,5 +49,39 @@ ${hasImage ? "(참고: 학생이 글과 함께 정성스럽게 그린 그림도 
       feedbackText: `에러 발생: ${error.message} (선생님께 이 메시지를 알려주세요!)`, 
       success: false 
     };
+export const extractTextFromImage = async (
+  base64Image: string,
+  mimeType: string
+): Promise<string> => {
+  if (!API_KEY || API_KEY === 'your_api_key_here') {
+    throw new Error("VITE_GEMINI_API_KEY가 설정되지 않았습니다.");
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    // Base64 문자열에서 헤더(data:image/jpeg;base64,) 부분을 제거
+    const base64Data = base64Image.split(',')[1] || base64Image;
+
+    const prompt = `
+이 이미지에 적힌 손글씨 텍스트를 인식해서 텍스트로만 반환해줘.
+인식할 수 없는 문자는 문맥에 맞게 자연스럽게 유추하거나, 유추할 수 없다면 그대로 비워둬.
+단, 불필요한 설명이나 부가적인 말은 절대로 추가하지 말고, 오직 인식된 텍스트 내용만 출력해.
+`;
+
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType
+      }
+    };
+
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    return response.text().trim();
+  } catch (error: any) {
+    console.error("OCR error:", error);
+    throw new Error(`이미지에서 글자를 읽는 중 오류가 발생했어요: ${error.message}`);
   }
 };

@@ -47,3 +47,18 @@ CREATE POLICY "Users can view own profile"
 CREATE POLICY "Users can view own logs"
   ON public.reading_logs FOR SELECT
   USING ( auth.uid() = user_id );
+
+-- 작성자 본인이 자신의 독서록을 삭제할 수 있는 정책
+CREATE POLICY "Users can delete own logs"
+  ON public.reading_logs FOR DELETE
+  USING ( auth.uid() = user_id );
+
+-- 선생님은 모든 독서록을 삭제할 수 있는 정책 (users 테이블 조인으로 확인)
+CREATE POLICY "Teachers can delete all logs"
+  ON public.reading_logs FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'teacher'
+    )
+  );

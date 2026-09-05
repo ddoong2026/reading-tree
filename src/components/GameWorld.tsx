@@ -1,7 +1,7 @@
 import React, { useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, ContactShadows, Instances, Instance } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Instances, Instance, Html, useProgress } from '@react-three/drei';
 import { Link, useParams } from 'react-router-dom';
 import * as THREE from 'three';
 
@@ -26,6 +26,26 @@ const SimpleCloud = ({ position, scale = 1 }: { position: [number, number, numbe
     </mesh>
   </group>
 );
+
+// --- 로딩 화면 컴포넌트 ---
+const CanvasLoader = () => {
+  const { progress } = useProgress();
+  return (
+    <Html center zIndexRange={[1000, 0]}>
+      <div className="flex flex-col items-center justify-center p-8 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl min-w-[280px]">
+        <div className="text-5xl mb-4 animate-bounce">🌳</div>
+        <h2 className="text-2xl font-bold text-green-800 mb-4">학급 나무로 이동 중...</h2>
+        <div className="w-full bg-green-100 rounded-full h-4 mb-2 overflow-hidden border border-green-200">
+          <div 
+            className="bg-gradient-to-r from-green-400 to-emerald-500 h-full transition-all duration-300 ease-out" 
+            style={{ width: `${Math.max(5, progress)}%` }}
+          ></div>
+        </div>
+        <p className="text-md font-bold text-green-600">{progress.toFixed(0)}% 완료</p>
+      </div>
+    </Html>
+  );
+};
 
 const GameWorld: React.FC = () => {
   const { classId } = useParams<{ classId: string }>();
@@ -87,7 +107,7 @@ const GameWorld: React.FC = () => {
         performance={{ min: 0.5 }} 
         camera={{ position: [0, 8, 18], fov: 45 }}
       >
-        <Suspense fallback={null}>
+        <Suspense fallback={<CanvasLoader />}>
           <ambientLight intensity={0.6} />
           <directionalLight 
             castShadow 
