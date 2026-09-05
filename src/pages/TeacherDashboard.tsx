@@ -35,6 +35,10 @@ const TeacherDashboard: React.FC = () => {
   const [allLogs, setAllLogs] = useState<ReadingLog[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
+  
+  // 프롬프트 상태
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 
   // 데이터 불러오기
   const fetchData = async () => {
@@ -59,7 +63,32 @@ const TeacherDashboard: React.FC = () => {
     if (logError) console.error("Error fetching logs:", logError);
     else setAllLogs((logData as any) || []);
 
+    // 3. AI 프롬프트 가져오기
+    const { data: promptData, error: promptError } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('id', 'ai_prompt')
+      .maybeSingle();
+
+    if (!promptError && promptData) {
+      setAiPrompt(promptData.value);
+    }
+
     setLoadingData(false);
+  };
+
+  const handleSavePrompt = async () => {
+    setIsSavingPrompt(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ id: 'ai_prompt', value: aiPrompt });
+    
+    if (error) {
+      alert('프롬프트 저장 중 오류가 발생했습니다.\n(SQL을 실행하여 테이블을 생성했는지 확인해주세요.)\n' + error.message);
+    } else {
+      alert('AI 피드백 프롬프트가 성공적으로 저장되었습니다!');
+    }
+    setIsSavingPrompt(false);
   };
 
   useEffect(() => {
@@ -513,6 +542,32 @@ const TeacherDashboard: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* AI 피드백 프롬프트 설정 섹션 */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm mt-8">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">AI 피드백 설정 (프롬프트 관리)</h2>
+        <p className="text-gray-500 mb-4 text-sm">
+          나무요정 선생님이 아이들에게 피드백을 줄 때 사용할 프롬프트(명령어)입니다.<br/>
+          반드시 <strong>[학생글]</strong> 이라는 키워드를 포함해주세요. 실제 학생의 독서록 내용으로 자동 변환됩니다.
+        </p>
+        
+        <textarea
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          placeholder="여기에 AI에게 내릴 지시사항을 적어주세요. (예: 너는 다정한 선생님이야...)"
+          className="w-full p-4 min-h-[250px] bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 resize-y mb-4 font-mono text-sm"
+        />
+        
+        <div className="flex justify-end">
+          <button 
+            onClick={handleSavePrompt}
+            disabled={isSavingPrompt}
+            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md transition-colors disabled:opacity-50"
+          >
+            {isSavingPrompt ? '저장 중...' : '프롬프트 저장하기'}
+          </button>
         </div>
       </div>
     </div>

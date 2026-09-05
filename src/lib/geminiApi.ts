@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient';
+
 export interface AIFeedbackResponse {
   feedbackText: string;
   success: boolean;
@@ -8,6 +10,18 @@ export const generateReadingFeedback = async (
   hasImage: boolean
 ): Promise<AIFeedbackResponse> => {
   try {
+    // 1. 커스텀 프롬프트 가져오기
+    let customPrompt = null;
+    const { data: promptData, error: promptError } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('id', 'ai_prompt')
+      .maybeSingle();
+      
+    if (!promptError && promptData) {
+      customPrompt = promptData.value;
+    }
+
     const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: {
@@ -17,6 +31,7 @@ export const generateReadingFeedback = async (
         action: 'generateFeedback',
         textContent,
         hasImage,
+        customPrompt,
       }),
     });
 
