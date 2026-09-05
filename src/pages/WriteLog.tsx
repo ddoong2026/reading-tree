@@ -72,7 +72,7 @@ const WriteLog: React.FC = () => {
         const fileName = `${user.id}_${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('reading-log-images')
           .upload(filePath, imageFile);
 

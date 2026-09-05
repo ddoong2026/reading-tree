@@ -47,8 +47,11 @@ ${hasImage ? "(참고: 학생이 글과 함께 정성스럽게 그린 그림도 
     console.error("AI feedback error:", error);
     return { 
       feedbackText: `에러 발생: ${error.message} (선생님께 이 메시지를 알려주세요!)`, 
-      success: false 
+      success: false
     };
+  }
+};
+
 export const extractTextFromImage = async (
   base64Image: string,
   mimeType: string
