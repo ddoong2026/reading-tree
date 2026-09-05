@@ -18,6 +18,9 @@ const WriteLog: React.FC = () => {
   const [imageMimeType, setImageMimeType] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOcrDone, setIsOcrDone] = useState(false);
+  const [currentLogId, setCurrentLogId] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   const { user } = useAuth();
 
@@ -45,6 +48,7 @@ const WriteLog: React.FC = () => {
         const result = reader.result as string;
         setImagePreview(result);
         setBase64Image(result);
+        setIsOcrDone(false); // 이미지가 변경되면 OCR 상태 초기화
       };
       reader.readAsDataURL(file);
     }
@@ -55,6 +59,7 @@ const WriteLog: React.FC = () => {
     setImagePreview(null);
     setBase64Image(null);
     setImageMimeType(null);
+    setIsOcrDone(false);
   };
 
   // 제출 및 DB 연동
@@ -62,11 +67,20 @@ const WriteLog: React.FC = () => {
     if (!bookTitle || (!text && !imageFile) || !user) return;
     
     setIsSubmitting(true);
-    let finalContent = text;
-    let uploadedImageUrl = null;
 
     try {
-      // 1. 이미지가 있다면 Supabase Storage에 업로드
+      // 1. 손글씨인 경우, 첫 클릭 시에는 OCR만 수행하고 종료 (저장 안 함)
+      if (imageType === 'handwriting' && base64Image && imageMimeType && !isOcrDone) {
+        const ocrText = await extractTextFromImage(base64Image, imageMimeType);
+        const newContent = text ? `${text}\n\n[손글씨 내용]\n${ocrText}` : ocrText;
+        setText(newContent); // 화면의 텍스트 상자에 입력하여 학생이 수정할 수 있게 함
+        setIsOcrDone(true); // OCR 완료 상태로 변경
+        setIsSubmitting(false);
+        return; // 여기서 함수 종료! (DB 저장 안 함)
+      }
+
+      // 2. 이미지가 있다면 Supabase Storage에 업로드 (진짜 제출 시에만)
+      let uploadedImageUrl = null;
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${user.id}_${Date.now()}.${fileExt}`;
@@ -78,7 +92,6 @@ const WriteLog: React.FC = () => {
 
         if (uploadError) {
           console.error('Storage upload error:', uploadError);
-          // 버킷이 없거나 권한이 없을 경우 임시로 더미 URL 사용 (로컬 테스트용)
           uploadedImageUrl = 'https://via.placeholder.com/400x300?text=Upload+Failed+Dummy';
         } else {
           const { data: publicUrlData } = supabase.storage
@@ -88,38 +101,46 @@ const WriteLog: React.FC = () => {
         }
       }
 
-      // 2. 손글씨인 경우 OCR 수행
-      if (imageType === 'handwriting' && base64Image && imageMimeType) {
-        try {
-          const ocrText = await extractTextFromImage(base64Image, imageMimeType);
-          finalContent = text ? `${text}\n\n[손글씨 내용]\n${ocrText}` : ocrText;
-          setText(finalContent); // 추출된 텍스트를 화면에 표시하여 수정 가능하게 함
-        } catch (ocrError) {
-          console.error('OCR Error:', ocrError);
-          alert('손글씨를 텍스트로 변환하는 데 실패했습니다. 다시 시도해주세요.');
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
-      // 3. AI 피드백 요청 (최종 텍스트 기반)
-      const aiResult = await generateReadingFeedback(finalContent, !!uploadedImageUrl);
+      // 3. AI 피드백 요청 (현재 텍스트상자의 최종 텍스트 기반)
+      const aiResult = await generateReadingFeedback(text, !!uploadedImageUrl);
       const aiResponse = aiResult.feedbackText;
 
       // 4. DB 저장
-      const { error } = await supabase.from('reading_logs').insert({
+      const { data: insertedData, error } = await supabase.from('reading_logs').insert({
         user_id: user.id,
         book_title: bookTitle,
-        text_content: finalContent,
+        text_content: text,
         image_url: uploadedImageUrl,
         ai_feedback: aiResponse
-      });
+      }).select().single();
 
       if (error) throw error;
       
+      setCurrentLogId(insertedData.id);
       setFeedback(aiResponse);
     } catch (error: any) {
-      alert('독서록 저장 중 오류가 발생했습니다: ' + error.message);
+      alert('오류가 발생했습니다: ' + error.message);
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 피드백 수정 후 DB 업데이트
+  const handleUpdateLog = async () => {
+    if (!currentLogId || !text) return;
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('reading_logs')
+        .update({ text_content: text })
+        .eq('id', currentLogId);
+
+      if (error) throw error;
+      alert('성공적으로 수정되었습니다!');
+      setIsEditModalOpen(false);
+    } catch (error: any) {
+      alert('수정 중 오류가 발생했습니다: ' + error.message);
       console.error(error);
     } finally {
       setIsSubmitting(false);
@@ -237,7 +258,9 @@ const WriteLog: React.FC = () => {
             className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-2xl shadow-md flex justify-center items-center gap-2 transition-colors text-lg disabled:opacity-50"
           >
             <Send size={20} />
-            {isSubmitting ? '저장 중...' : '다 썼어요! (제출하기)'}
+            {isSubmitting 
+              ? (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출 중...' : '저장 중...') 
+              : (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출하기' : '다 썼어요! (제출하기)')}
           </button>
         </div>
 
@@ -269,10 +292,54 @@ const WriteLog: React.FC = () => {
               {feedback}
             </p>
             
-            <div className="mt-4 flex justify-end">
+            
+            <div className="mt-4 flex gap-3 justify-end">
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="px-6 py-2 bg-white text-blue-600 font-bold rounded-full shadow-sm hover:bg-blue-50 border border-blue-200"
+              >
+                내 글 다시 고치기
+              </button>
               <Link to="/student" className="px-6 py-2 bg-white text-green-700 font-bold rounded-full shadow-sm hover:bg-green-50">
                 대시보드로 돌아가기
               </Link>
+            </div>
+          </div>
+        )}
+
+        {/* 글 수정 팝업 모달 */}
+        {isEditModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">내 독서록 수정하기</h2>
+              
+              <div className="mb-4 bg-green-50 p-4 rounded-xl text-green-900 text-sm">
+                <strong>선생님의 피드백:</strong><br />
+                {feedback}
+              </div>
+
+              <label className="block text-gray-700 font-semibold mb-2">선생님의 조언을 보고 내 글을 다듬어 보세요!</label>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                className="w-full p-4 min-h-[200px] bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y mb-4"
+              ></textarea>
+
+              <div className="flex justify-end gap-3">
+                <button 
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-6 py-2 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200"
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={handleUpdateLog}
+                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl shadow-md transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? '수정 중...' : '최종 저장'}
+                </button>
+              </div>
             </div>
           </div>
         )}
