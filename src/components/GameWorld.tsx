@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { TreeModel } from './world3d/TreeModel';
 import { CharacterModel } from './world3d/CharacterModel';
 import { PetModel } from './world3d/PetModel';
+import { useAuth } from '../context/AuthContext';
 
 // 완전한 단색(흰색) 구름 컴포넌트
 const SimpleCloud = ({ position, scale = 1 }: { position: [number, number, number], scale?: number }) => (
@@ -49,8 +50,11 @@ const CanvasLoader = () => {
 
 const GameWorld: React.FC = () => {
   const { classId } = useParams<{ classId: string }>();
+  const { profile } = useAuth();
   const [characterTarget, setCharacterTarget] = useState<THREE.Vector3 | null>(null);
   const [controlMode, setControlMode] = useState<'click' | 'keyboard'>('click');
+  
+  const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';
   
   // 나무 레벨업 테스트용 상태
   const initialLevel = classId === 'class-3' ? 1 : 3;
@@ -133,7 +137,7 @@ const GameWorld: React.FC = () => {
             ))}
           </Instances>
 
-          <TreeModel position={[0, 0, 0]} level={treeLevel} />
+          <TreeModel position={[0, 0, 0]} level={treeLevel} dashboardPath={dashboardPath} />
 
           <mesh 
             rotation={[-Math.PI / 2, 0, 0]} 
@@ -184,10 +188,10 @@ const GameWorld: React.FC = () => {
 
       <div className="absolute top-6 right-6 z-10 flex gap-4">
         <Link 
-          to="/student" 
+          to={dashboardPath} 
           className="px-6 py-2 bg-blue-500 text-white font-bold rounded-full shadow-md hover:bg-blue-600 transition-all"
         >
-          내 대시보드
+          {profile?.role === 'teacher' || profile?.role === 'admin' ? '교사 대시보드' : '내 대시보드'}
         </Link>
         <Link 
           to="/write" 

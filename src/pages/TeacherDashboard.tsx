@@ -14,6 +14,7 @@ interface ReadingLog {
   user_id: string;
   book_title: string;
   created_at: string;
+  text_content: string | null;
   ai_feedback: string;
   image_url: string | null;
   users?: { name: string };
@@ -40,6 +41,9 @@ const TeacherDashboard: React.FC = () => {
   const [aiPrompt, setAiPrompt] = useState('');
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 
+  // 모달 상태
+  const [viewLog, setViewLog] = useState<ReadingLog | null>(null);
+
   // 데이터 불러오기
   const fetchData = async () => {
     setLoadingData(true);
@@ -57,7 +61,7 @@ const TeacherDashboard: React.FC = () => {
     // 2. 모든 독서록 가져오기 (이름 포함)
     const { data: logData, error: logError } = await supabase
       .from('reading_logs')
-      .select('id, user_id, book_title, created_at, ai_feedback, image_url, users(name)')
+      .select('id, user_id, book_title, created_at, text_content, ai_feedback, image_url, users(name)')
       .order('created_at', { ascending: false });
 
     if (logError) console.error("Error fetching logs:", logError);
@@ -514,7 +518,12 @@ const TeacherDashboard: React.FC = () => {
                     <td className="py-3 px-4 text-gray-500 text-sm">
                       {new Date(log.created_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="py-3 px-4 font-medium text-gray-700">{log.book_title}</td>
+                    <td 
+                      className="py-3 px-4 font-medium text-purple-600 cursor-pointer hover:underline"
+                      onClick={() => setViewLog(log)}
+                    >
+                      {log.book_title}
+                    </td>
                     <td className="py-3 px-4">
                       {log.image_url ? (
                         <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-xs font-medium">
@@ -571,6 +580,68 @@ const TeacherDashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* 독서록 상세 보기 모달 */}
+      {viewLog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">{viewLog.book_title}</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  작성자: <span className="font-semibold text-purple-600">{viewLog.users?.name || '알 수 없음'}</span> | 
+                  일시: {new Date(viewLog.created_at).toLocaleString('ko-KR')}
+                </p>
+              </div>
+              <button 
+                onClick={() => setViewLog(null)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {viewLog.image_url && (
+              <div className="mb-6">
+                <h3 className="text-sm font-bold text-gray-700 mb-2">첨부 이미지</h3>
+                <img src={viewLog.image_url} alt="학생 첨부 이미지" className="max-h-64 rounded-xl border border-gray-200 shadow-sm" />
+              </div>
+            )}
+
+            <div className="mb-6">
+              <h3 className="text-sm font-bold text-gray-700 mb-2">학생이 작성한 내용</h3>
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 min-h-[100px] whitespace-pre-wrap text-gray-800">
+                {viewLog.text_content || <span className="text-gray-400 italic">내용이 없습니다.</span>}
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h3>
+              <div className="p-4 bg-purple-50 rounded-xl border border-purple-100 min-h-[80px] whitespace-pre-wrap text-purple-700">
+                {viewLog.ai_feedback || <span className="text-gray-400 italic">피드백이 없습니다.</span>}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button 
+                onClick={() => setViewLog(null)}
+                className="px-6 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200"
+              >
+                닫기
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteLog(viewLog.id, viewLog.book_title, viewLog.users?.name || '알 수 없음');
+                  setViewLog(null);
+                }}
+                className="px-6 py-2 bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl"
+              >
+                삭제하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

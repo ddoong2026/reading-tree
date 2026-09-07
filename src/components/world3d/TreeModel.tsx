@@ -81,9 +81,10 @@ interface TreeModelProps {
   scale?: number;
   level?: number;
   disableMenu?: boolean;
+  dashboardPath?: string;
 }
 
-export const TreeModel: React.FC<TreeModelProps> = ({ position = [0, 0, 0], scale = 25, level, disableMenu = false }) => {
+export const TreeModel: React.FC<TreeModelProps> = ({ position = [0, 0, 0], scale = 25, level, disableMenu = false, dashboardPath = '/student' }) => {
   // tree4.glb 파일을 로드합니다.
   const { scene } = useGLTF('/tree4.glb');
   const clonedScene = useMemo(() => {
@@ -219,7 +220,7 @@ export const TreeModel: React.FC<TreeModelProps> = ({ position = [0, 0, 0], scal
               <span>✍️</span> 독서록 쓰기
             </button>
             <button 
-              onClick={(e) => { e.stopPropagation(); navigate('/student'); }}
+              onClick={(e) => { e.stopPropagation(); navigate(dashboardPath); }}
               className="w-full px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold rounded-xl shadow-sm transition-colors text-left flex items-center gap-2"
             >
               <span>👀</span> 독서록 구경하기

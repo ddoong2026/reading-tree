@@ -29,7 +29,7 @@ const App: React.FC = () => {
           } />
           
           <Route path="/student/:studentId" element={
-            <ProtectedRoute allowedRole="teacher">
+            <ProtectedRoute allowedRoles={['teacher', 'admin']}>
               <StudentDashboard />
             </ProtectedRoute>
           } />
