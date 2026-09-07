@@ -41,38 +41,52 @@ const StudentDashboard: React.FC = () => {
   useEffect(() => {
     if (!targetUserId) return;
 
-    const fetchLogs = async () => {
-      const { data, error } = await supabase
-        .from('reading_logs')
-        .select('id, book_title, category, created_at, text_content, ai_feedback, image_url')
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false });
+    const loadData = async () => {
+      setLoading(true);
+      const [logsResponse, statsResponse] = await Promise.all([
+        supabase
+          .from('reading_logs')
+          .select('id, book_title, category, created_at, text_content, ai_feedback, image_url')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('users')
+          .select('name, points, item_water, item_sun, item_wind, plant_growth, class_id')
+          .eq('id', targetUserId)
+          .single()
+      ]);
 
-      if (error) {
-        console.error('Error fetching reading logs:', error);
-      } else {
-        setLogs(data || []);
+      if (logsResponse.error) console.error('Error fetching logs:', logsResponse.error);
+      const fetchedLogs = logsResponse.data || [];
+      setLogs(fetchedLogs);
+
+      if (statsResponse.data) {
+        const d = statsResponse.data;
+        if (isTeacherView) setStudentName(d.name || '');
+        
+        // 동적 포인트 계산: 획득한 포인트(독서록 수) - 사용한 포인트(아이템 수)
+        const earned = fetchedLogs.length;
+        const spent = (d.item_water || 0) + (d.item_sun || 0) + (d.item_wind || 0);
+        const actualPoints = Math.max(0, earned - spent);
+
+        setUserStats({
+          points: actualPoints,
+          item_water: d.item_water || 0,
+          item_sun: d.item_sun || 0,
+          item_wind: d.item_wind || 0,
+          plant_growth: d.plant_growth || 0,
+          class_id: d.class_id || null
+        });
+
+        // DB에 포인트가 실제와 다르면 동기화 (선택적)
+        if (d.points !== actualPoints && !isTeacherView) {
+          await supabase.from('users').update({ points: actualPoints }).eq('id', targetUserId);
+        }
       }
       setLoading(false);
     };
 
-    const fetchUserStats = async () => {
-      const { data } = await supabase.from('users').select('name, points, item_water, item_sun, item_wind, plant_growth, class_id').eq('id', targetUserId).single();
-      if (data) {
-        if (isTeacherView) setStudentName(data.name || '');
-        setUserStats({
-          points: data.points || 0,
-          item_water: data.item_water || 0,
-          item_sun: data.item_sun || 0,
-          item_wind: data.item_wind || 0,
-          plant_growth: data.plant_growth || 0,
-          class_id: data.class_id || null
-        });
-      }
-    };
-
-    fetchLogs();
-    fetchUserStats();
+    loadData();
   }, [targetUserId, isTeacherView]);
 
   const handleDelete = async (id: string, title: string) => {
@@ -135,7 +149,6 @@ const StudentDashboard: React.FC = () => {
     setUserStats(newStats);
 
     await supabase.from('users').update({ 
-      points: newStats.points,
       [column]: newStats[column]
     }).eq('id', targetUserId);
   };
@@ -165,12 +178,7 @@ const StudentDashboard: React.FC = () => {
     alert("식물에게 아이템을 주었습니다! 식물이 조금 성장했어요.");
   };
 
-  const handleUpdateClass = async (newClassId: string) => {
-      if (isTeacherView) return;
-      setUserStats(prev => ({ ...prev, class_id: newClassId }));
-      await supabase.from('users').update({ class_id: newClassId }).eq('id', targetUserId);
-      alert('반 설정이 변경되었습니다.');
-  };
+
 
   // KDC 읽은 카테고리 집합
   const readCategories = new Set(logs.map(log => log.category || '000'));
@@ -183,19 +191,12 @@ const StudentDashboard: React.FC = () => {
           <h1 className="text-3xl font-bold text-blue-900 mb-2">
             {isTeacherView ? `${studentName} 학생의 독서 기록` : '내 독서 기록'}
           </h1>
-          {!isTeacherView && (
+          {!isTeacherView && userStats.class_id && (
             <div className="flex items-center gap-3">
-              <label className="text-sm font-bold text-gray-700 bg-white px-3 py-1.5 rounded-lg shadow-sm">🌱 나의 소속 반</label>
-              <select 
-                value={userStats.class_id || ''} 
-                onChange={(e) => handleUpdateClass(e.target.value)}
-                className="p-1.5 border-2 border-green-200 rounded-lg bg-white shadow-sm font-bold text-green-700 focus:outline-none focus:border-green-400 cursor-pointer"
-              >
-                <option value="">반을 선택하세요</option>
-                <option value="class-1">새싹 1반</option>
-                <option value="class-2">햇살 2반</option>
-                <option value="class-3">푸른 3반</option>
-              </select>
+              <label className="text-sm font-bold text-gray-700 bg-white px-3 py-1.5 rounded-lg shadow-sm">🌱 나의 소속 반: {
+                userStats.class_id === 'class-1' ? '새싹 1반' : 
+                userStats.class_id === 'class-2' ? '햇살 2반' : '푸른 3반'
+              }</label>
             </div>
           )}
         </div>

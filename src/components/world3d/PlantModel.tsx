@@ -20,26 +20,28 @@ export const PlantModel: React.FC<PlantModelProps> = ({ position = [0, 0, 0], gr
     }
   });
 
-  // Calculate stage based on growth and isFlower
-  // Stage 0: Seed (growth < 5)
-  // Stage 1: Sprout (growth 5-9)
-  // Stage 2: Stem (growth 10-14)
-  // Stage 3: Bud (growth 15+)
-  // Stage 4: Flower (isFlower === true)
+  // Stage 0: Seed (growth 0)
+  // Stage 1: Sprout (growth 1-3)
+  // Stage 2: Stem with leaves (growth 4-6)
+  // Stage 3: Bud (growth 7-8)
+  // Stage 4: Flower (growth >= 9 or isFlower)
   
   let stage = 0;
-  if (isFlower) {
+  if (isFlower || growth >= 9) {
     stage = 4;
-  } else if (growth >= 15) {
+  } else if (growth >= 7) {
     stage = 3;
-  } else if (growth >= 10) {
+  } else if (growth >= 4) {
     stage = 2;
-  } else if (growth >= 5) {
+  } else if (growth >= 1) {
     stage = 1;
   }
 
+  // 부드러운 성장을 위한 스케일 계산 (최소 0.6에서 1.2까지)
+  const baseScale = stage === 4 ? 1.2 : 0.6 + (growth / 9.0) * 0.6;
+
   return (
-    <group position={position} ref={groupRef}>
+    <group position={position} ref={groupRef} scale={[baseScale, baseScale, baseScale]}>
       {/* Dirt Mound */}
       <Sphere args={[0.6, 16, 16]} position={[0, -0.2, 0]} scale={[1, 0.4, 1]}>
         <meshStandardMaterial color="#5c4033" roughness={1} />

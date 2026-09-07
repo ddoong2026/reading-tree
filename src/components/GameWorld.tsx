@@ -63,6 +63,11 @@ const GameWorld: React.FC = () => {
 
   const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, isFlower: boolean, position: [number, number, number] }[]>([]);
 
+  // 심기 모드 관련 상태
+  const [isPlantingMode, setIsPlantingMode] = useState(false);
+  const [plantPreviewPos, setPlantPreviewPos] = useState<THREE.Vector3 | null>(null);
+  const [plantPreviewValid, setPlantPreviewValid] = useState(false);
+
   // 식물 상호작용 상태
   const [hoveredPlantId, setHoveredPlantId] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -86,7 +91,7 @@ const GameWorld: React.FC = () => {
   React.useEffect(() => {
     const fetchPlants = async () => {
       // 1. Fetch all users
-      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id');
+      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z');
       if (classId) {
         userQuery = userQuery.eq('class_id', classId);
       }
@@ -101,26 +106,32 @@ const GameWorld: React.FC = () => {
           logsData.some(log => log.user_id === user.id)
         );
 
-        const plants = activeUsers.map((user, index) => {
+        let needsToPlant = false;
+
+        const plants = activeUsers.map((user) => {
           const userLogs = logsData.filter(log => log.user_id === user.id);
           const uniqueCategories = new Set(userLogs.map(log => log.category || '000'));
           const isFlower = uniqueCategories.size >= 10;
           
-          // Generate position around the tree
-          const angle = (index / activeUsers.length) * Math.PI * 2 + (Math.random() * 0.5);
-          const radius = 4 + Math.random() * 8;
-          const x = Math.cos(angle) * radius;
-          const z = Math.sin(angle) * radius;
+          if (user.id === profile?.id && userLogs.length >= 1 && user.plant_position_x == null) {
+            needsToPlant = true;
+          }
+
+          if (user.plant_position_x == null || user.plant_position_z == null) {
+            return null; // 아직 심지 않음
+          }
           
           return {
             id: user.id,
             name: user.name,
             growth: user.plant_growth || 0,
             isFlower,
-            position: [x, 0, z] as [number, number, number]
+            position: [user.plant_position_x, 0, user.plant_position_z] as [number, number, number]
           };
-        });
+        }).filter(Boolean) as typeof studentsPlants;
+        
         setStudentsPlants(plants);
+        setIsPlantingMode(needsToPlant);
       }
     };
     fetchPlants();
@@ -128,8 +139,44 @@ const GameWorld: React.FC = () => {
 
   // 바닥(땅) 클릭 핸들러
   const handleGroundClick = (event: ThreeEvent<PointerEvent>) => {
+    if (isPlantingMode) {
+      const pt = event.point.clone();
+      setPlantPreviewPos(pt);
+      
+      const distToTree = Math.sqrt(pt.x * pt.x + pt.z * pt.z);
+      let isValid = distToTree >= 3.0; // 나무 반경 3.0 이내 불가
+      
+      if (isValid) {
+        for (const p of studentsPlants) {
+          const dx = pt.x - p.position[0];
+          const dz = pt.z - p.position[2];
+          if (Math.sqrt(dx * dx + dz * dz) < 1.5) {
+            isValid = false;
+            break;
+          }
+        }
+      }
+      setPlantPreviewValid(isValid);
+      return;
+    }
+
     if (controlMode === 'keyboard') return; // 키보드 모드일 때는 클릭 이동 무시
     setCharacterTarget(event.point.clone());
+  };
+
+  const handleConfirmPlant = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!plantPreviewPos || !profile?.id) return;
+    
+    await supabase.from('users').update({
+      plant_position_x: plantPreviewPos.x,
+      plant_position_z: plantPreviewPos.z
+    }).eq('id', profile.id);
+    
+    setIsPlantingMode(false);
+    setPlantPreviewPos(null);
+    alert("씨앗을 심었습니다! 이제 물을 주고 식물을 키워보세요.");
+    window.location.reload();
   };
 
 
@@ -179,10 +226,13 @@ const GameWorld: React.FC = () => {
               position={plant.position}
               onPointerOver={(e) => { e.stopPropagation(); setHoveredPlantId(plant.id); document.body.style.cursor = 'pointer'; }}
               onPointerOut={(e) => { e.stopPropagation(); setHoveredPlantId(null); document.body.style.cursor = 'auto'; }}
-              onClick={(e) => { e.stopPropagation(); setSelectedStudentId(plant.id); }}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                if (!isPlantingMode) setSelectedStudentId(plant.id); 
+              }}
             >
               <PlantModel growth={plant.growth} isFlower={plant.isFlower} />
-              {hoveredPlantId === plant.id && (
+              {!isPlantingMode && hoveredPlantId === plant.id && (
                 <Html position={[0, 2, 0]} center zIndexRange={[100, 0]}>
                   <div className="px-3 py-2 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border-2 border-green-300 text-sm font-bold text-green-800 whitespace-nowrap cursor-pointer animate-fade-in transition-transform hover:scale-110">
                     🌱 {plant.name}의 식물 구경하기
@@ -191,6 +241,31 @@ const GameWorld: React.FC = () => {
               )}
             </group>
           ))}
+          
+          {isPlantingMode && plantPreviewPos && (
+            <group position={plantPreviewPos}>
+               <mesh position={[0, 0.1, 0]}>
+                   <sphereGeometry args={[0.2, 16, 16]} />
+                   <meshStandardMaterial color={plantPreviewValid ? "#4ade80" : "#ef4444"} transparent opacity={0.7} />
+               </mesh>
+               <Html position={[0, 1, 0]} center zIndexRange={[100, 0]}>
+                  <div className="flex flex-col items-center gap-2">
+                    {!plantPreviewValid ? (
+                      <span className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm font-bold shadow whitespace-nowrap">
+                        여기에 심을 수 없습니다 (너무 가깝습니다)
+                      </span>
+                    ) : (
+                      <button 
+                        onPointerDown={handleConfirmPlant}
+                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-bold shadow-lg whitespace-nowrap animate-bounce pointer-events-auto"
+                      >
+                        씨앗 심기 🌱
+                      </button>
+                    )}
+                  </div>
+               </Html>
+            </group>
+          )}
           
           <Instances limit={50} castShadow={false} receiveShadow={false}>
             <boxGeometry args={[0.2, 1, 0.2]} />
@@ -265,9 +340,11 @@ const GameWorld: React.FC = () => {
       </div>
 
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 bg-black/60 text-white px-8 py-3 rounded-full backdrop-blur-sm pointer-events-none text-base font-medium shadow-lg animate-pulse whitespace-nowrap">
-        {controlMode === 'click' 
-          ? '👆 마우스로 땅을 클릭하여 이동하고, 친구의 식물을 클릭하여 독서록을 구경해보세요!'
-          : '⌨️ W,A,S,D(이동) / Shift(달리기) / Space(점프) - 마우스로 식물 클릭 가능'}
+        {isPlantingMode 
+          ? '🌱 첫 독서록을 작성했습니다! 땅을 클릭하여 씨앗을 심을 위치를 정해주세요.' 
+          : controlMode === 'click' 
+            ? '👆 마우스로 땅을 클릭하여 이동하고, 친구의 식물을 클릭하여 독서록을 구경해보세요!'
+            : '⌨️ W,A,S,D(이동) / Shift(달리기) / Space(점프) - 마우스로 식물 클릭 가능'}
       </div>
 
       {/* 독서록 구경하기 모달 */}

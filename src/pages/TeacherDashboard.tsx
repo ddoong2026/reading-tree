@@ -7,6 +7,7 @@ interface Student {
   id: string;
   name: string;
   created_at: string;
+  class_id?: string | null;
 }
 
 interface ReadingLog {
@@ -51,7 +52,7 @@ const TeacherDashboard: React.FC = () => {
     // 1. 학생 목록 가져오기
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, name, created_at')
+      .select('id, name, created_at, class_id')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -203,6 +204,16 @@ const TeacherDashboard: React.FC = () => {
     } else {
       setAllLogs(allLogs.filter(log => log.id !== id));
       alert('독서록이 삭제되었습니다.');
+    }
+  };
+
+  const handleUpdateStudentClass = async (studentId: string, newClassId: string) => {
+    const { error } = await supabase.from('users').update({ class_id: newClassId }).eq('id', studentId);
+    if (error) {
+      alert('반 설정 변경 중 오류가 발생했습니다: ' + error.message);
+    } else {
+      // update local state
+      setStudents(students.map(s => s.id === studentId ? { ...s, class_id: newClassId } : s));
     }
   };
 
@@ -409,14 +420,15 @@ const TeacherDashboard: React.FC = () => {
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">아이디 (학번)</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">가입일</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">작성한 독서록</th>
+                  <th className="py-3 px-4 text-gray-500 font-semibold text-sm">소속 반</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm text-center">관리</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingData ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
+                  <tr><td colSpan={5} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
                 ) : students.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-500 italic">아직 등록된 학생이 없습니다.</td></tr>
+                  <tr><td colSpan={5} className="text-center py-8 text-gray-500 italic">아직 등록된 학생이 없습니다.</td></tr>
                 ) : (
                   students.map(student => {
                     const studentLogsCount = allLogs.filter(log => log.user_id === student.id).length;
@@ -434,6 +446,18 @@ const TeacherDashboard: React.FC = () => {
                           <span className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-bold">
                             {studentLogsCount}건
                           </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <select 
+                            value={student.class_id || ''} 
+                            onChange={(e) => handleUpdateStudentClass(student.id, e.target.value)}
+                            className="p-1 border border-gray-200 rounded text-sm text-gray-700 focus:outline-none focus:border-purple-400"
+                          >
+                            <option value="">미지정</option>
+                            <option value="class-1">새싹 1반</option>
+                            <option value="class-2">햇살 2반</option>
+                            <option value="class-3">푸른 3반</option>
+                          </select>
                         </td>
                         <td className="py-3 px-4 text-center">
                           <button 

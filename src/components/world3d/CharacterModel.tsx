@@ -57,14 +57,37 @@ export const CharacterModel: React.FC<CharacterModelProps> = ({ targetPosition, 
       if (keyboard.left) group.current.rotation.y += rotationSpeed;
       if (keyboard.right) group.current.rotation.y -= rotationSpeed;
 
-      // 전진/후진 (THREE.js 기본 축 기준으로 +Z가 앞면이라고 가정)
+      // 전진/후진 충돌 계산 (TREE_RADIUS = 2.5)
+      let attemptMove = false;
+      let nextPos = group.current.position.clone();
+      
       if (keyboard.forward) {
         group.current.translateZ(currentSpeed * delta);
-        moving = true;
+        nextPos.copy(group.current.position);
+        group.current.translateZ(-currentSpeed * delta); // 복구
+        attemptMove = true;
       }
       if (keyboard.backward) {
         group.current.translateZ(-currentSpeed * delta);
-        moving = true;
+        if (attemptMove && keyboard.forward) {
+          // 상쇄
+          nextPos.copy(group.current.position);
+          group.current.translateZ(currentSpeed * delta); // 복구
+          attemptMove = false;
+        } else {
+          nextPos.copy(group.current.position);
+          group.current.translateZ(currentSpeed * delta); // 복구
+          attemptMove = true;
+        }
+      }
+
+      if (attemptMove) {
+        const distToCenter = Math.sqrt(nextPos.x * nextPos.x + nextPos.z * nextPos.z);
+        if (distToCenter >= 2.5) {
+          if (keyboard.forward) group.current.translateZ(currentSpeed * delta);
+          if (keyboard.backward) group.current.translateZ(-currentSpeed * delta);
+          moving = true;
+        }
       }
 
       setIsMoving(moving);
@@ -123,7 +146,16 @@ export const CharacterModel: React.FC<CharacterModelProps> = ({ targetPosition, 
         direction.y = 0;
         direction.normalize();
         
-        group.current.position.add(direction.multiplyScalar(speed * delta));
+        const nextPos = currentPos.clone().add(direction.clone().multiplyScalar(speed * delta));
+        const distToCenter = Math.sqrt(nextPos.x * nextPos.x + nextPos.z * nextPos.z);
+        
+        if (distToCenter >= 2.5) {
+          group.current.position.copy(nextPos);
+        } else {
+          // 충돌
+          setIsMoving(false);
+          setIsRunning(false);
+        }
       } else {
         setIsMoving(false);
       }
