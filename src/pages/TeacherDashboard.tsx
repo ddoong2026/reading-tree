@@ -283,19 +283,16 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const handleDeleteStudent = async (id: string, name: string) => {
-    if (!window.confirm(`정말 [${name}] 학생의 계정을 삭제하시겠습니까?\n이 작업은 복구할 수 없으며 독서록 등 연관 데이터가 삭제될 수 있습니다.`)) return;
+    if (!window.confirm(`정말 [${name}] 학생의 계정을 삭제하시겠습니까?\n이 작업은 복구할 수 없으며 독서록 등 연관 데이터가 모두 삭제됩니다.`)) return;
 
-    // users 테이블에서 삭제 (삭제 권한을 위해 supabaseAdmin 사용)
-    const { error } = await supabaseAdmin
-      .from('users')
-      .delete()
-      .eq('id', id);
+    // Supabase RPC 함수를 호출하여 auth.users까지 완전히 삭제 (Security Definer 활용)
+    const { error } = await supabase.rpc('delete_user_account', { target_user_id: id });
 
     if (error) {
-      alert('학생 삭제 중 오류가 발생했습니다: ' + error.message);
+      alert('학생 삭제 중 오류가 발생했습니다: ' + error.message + '\n(Supabase에 SQL 쿼리가 실행되었는지 확인해주세요.)');
     } else {
       setStudents(students.filter(s => s.id !== id));
-      alert(`[${name}] 학생 계정이 삭제되었습니다.`);
+      alert(`[${name}] 학생 계정이 완전히 삭제되었습니다.`);
     }
   };
 
