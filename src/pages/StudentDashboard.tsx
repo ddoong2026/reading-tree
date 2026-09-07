@@ -203,7 +203,10 @@ const StudentDashboard: React.FC = () => {
         {isTeacherView ? (
           <Link to="/teacher" className="text-blue-600 hover:underline font-bold mt-2">교사 대시보드로 돌아가기</Link>
         ) : (
-          <Link to="/" className="text-blue-600 hover:underline font-bold mt-2">홈으로 돌아가기</Link>
+          <div className="flex gap-4">
+            <Link to="/world" className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold shadow-sm hover:bg-green-600 transition-colors">🌳 숲으로 돌아가기</Link>
+            <Link to="/" className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold shadow-sm hover:bg-blue-200 transition-colors">🏠 홈으로 돌아가기</Link>
+          </div>
         )}
       </header>
 

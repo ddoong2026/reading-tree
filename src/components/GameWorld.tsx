@@ -67,6 +67,7 @@ const GameWorld: React.FC = () => {
   const [isPlantingMode, setIsPlantingMode] = useState(false);
   const [plantPreviewPos, setPlantPreviewPos] = useState<THREE.Vector3 | null>(null);
   const [plantPreviewValid, setPlantPreviewValid] = useState(false);
+  const [hasSeed, setHasSeed] = useState(false);
 
   // 식물 상호작용 상태
   const [hoveredPlantId, setHoveredPlantId] = useState<string | null>(null);
@@ -129,9 +130,8 @@ const GameWorld: React.FC = () => {
             position: [user.plant_position_x, 0, user.plant_position_z] as [number, number, number]
           };
         }).filter(Boolean) as typeof studentsPlants;
-        
         setStudentsPlants(plants);
-        setIsPlantingMode(needsToPlant);
+        setHasSeed(needsToPlant);
       }
     };
     fetchPlants();
@@ -175,6 +175,7 @@ const GameWorld: React.FC = () => {
     
     setIsPlantingMode(false);
     setPlantPreviewPos(null);
+    setHasSeed(false);
     alert("씨앗을 심었습니다! 이제 물을 주고 식물을 키워보세요.");
     window.location.reload();
   };
@@ -322,6 +323,26 @@ const GameWorld: React.FC = () => {
         >
           {controlMode === 'click' ? '🎮 1인칭(키보드) 모드로 변경' : '🖱️ 3인칭(마우스) 모드로 변경'}
         </button>
+
+        {/* 씨앗 심기 수동 트리거 */}
+        {hasSeed && !isPlantingMode && (
+          <button
+            onClick={() => setIsPlantingMode(true)}
+            className="px-6 py-3 w-fit bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg border-2 border-emerald-300 transition-all flex items-center gap-2 mt-2 animate-bounce"
+          >
+            🌱 보유 씨앗 1개 (심기)
+          </button>
+        )}
+
+        {/* 씨앗 심기 취소 버튼 */}
+        {isPlantingMode && (
+          <button
+            onClick={() => { setIsPlantingMode(false); setPlantPreviewPos(null); }}
+            className="px-6 py-3 w-fit bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-2xl shadow-lg border-2 border-gray-300 transition-all flex items-center gap-2 mt-2"
+          >
+            ❌ 씨앗 심기 취소
+          </button>
+        )}
       </div>
 
       <div className="absolute top-6 right-6 z-10 flex gap-4">
@@ -339,9 +360,9 @@ const GameWorld: React.FC = () => {
         </Link>
       </div>
 
-      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 bg-black/60 text-white px-8 py-3 rounded-full backdrop-blur-sm pointer-events-none text-base font-medium shadow-lg animate-pulse whitespace-nowrap">
+      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 bg-black/60 text-white px-8 py-3 rounded-full backdrop-blur-sm pointer-events-none text-base font-medium shadow-lg whitespace-nowrap">
         {isPlantingMode 
-          ? '🌱 첫 독서록을 작성했습니다! 땅을 클릭하여 씨앗을 심을 위치를 정해주세요.' 
+          ? '🌱 심기 모드: 마우스로 땅을 클릭하여 씨앗을 심을 위치를 정해주세요.' 
           : controlMode === 'click' 
             ? '👆 마우스로 땅을 클릭하여 이동하고, 친구의 식물을 클릭하여 독서록을 구경해보세요!'
             : '⌨️ W,A,S,D(이동) / Shift(달리기) / Space(점프) - 마우스로 식물 클릭 가능'}

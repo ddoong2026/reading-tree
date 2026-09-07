@@ -208,12 +208,21 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const handleUpdateStudentClass = async (studentId: string, newClassId: string) => {
-    const { error } = await supabase.from('users').update({ class_id: newClassId }).eq('id', studentId);
+    // RLS 정책 때문에 선생님 계정으로 학생의 users 테이블을 업데이트하려면 supabaseAdmin(서비스 롤)을 사용해야 합니다.
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update({ class_id: newClassId })
+      .eq('id', studentId)
+      .select();
+
     if (error) {
       alert('반 설정 변경 중 오류가 발생했습니다: ' + error.message);
+    } else if (data && data.length === 0) {
+      alert('업데이트 권한이 없습니다.');
     } else {
       // update local state
       setStudents(students.map(s => s.id === studentId ? { ...s, class_id: newClassId } : s));
+      alert('반이 정상적으로 변경되었습니다.');
     }
   };
 
