@@ -23,7 +23,7 @@ const App: React.FC = () => {
           <Route path="/world/:classId?" element={<GameWorld />} />
           
           <Route path="/student" element={
-            <ProtectedRoute allowedRole="student">
+            <ProtectedRoute allowedRoles={['student']}>
               <StudentDashboard />
             </ProtectedRoute>
           } />
@@ -35,13 +35,13 @@ const App: React.FC = () => {
           } />
           
           <Route path="/teacher" element={
-            <ProtectedRoute allowedRole="teacher">
+            <ProtectedRoute allowedRoles={['teacher', 'admin']}>
               <TeacherDashboard />
             </ProtectedRoute>
           } />
           
           <Route path="/write" element={
-            <ProtectedRoute allowedRole="student">
+            <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
               <WriteLog />
             </ProtectedRoute>
           } />

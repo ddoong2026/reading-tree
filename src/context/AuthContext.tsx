@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 export interface UserProfile {
   id: string;
   name: string;
-  role: 'student' | 'teacher';
+  role: 'student' | 'teacher' | 'admin';
   class_id: string | null;
 }
 

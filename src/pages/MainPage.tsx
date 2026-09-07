@@ -22,14 +22,14 @@ const MainPage: React.FC = () => {
       <div className="absolute top-6 right-6 z-20 flex gap-4">
         {session ? (
           <div className="flex items-center gap-4 bg-white/80 backdrop-blur-sm px-6 py-2 rounded-full shadow-sm">
-            <span className="font-bold text-gray-800">{profile?.name} 님 ({profile?.role === 'teacher' ? '선생님' : '학생'})</span>
+            <span className="font-bold text-gray-800">{profile?.name} 님 ({profile?.role === 'teacher' ? '선생님' : profile?.role === 'admin' ? '관리자' : '학생'})</span>
             <button 
               onClick={signOut}
               className="text-sm font-bold text-red-500 hover:text-red-700 underline"
             >
               로그아웃
             </button>
-            {profile?.role === 'teacher' ? (
+            {profile?.role === 'teacher' || profile?.role === 'admin' ? (
               <Link to="/teacher" className="text-sm font-bold text-blue-600 hover:underline">선생님 페이지</Link>
             ) : (
               <Link to="/student" className="text-sm font-bold text-green-600 hover:underline">내 독서기록</Link>

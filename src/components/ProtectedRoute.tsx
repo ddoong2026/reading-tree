@@ -4,10 +4,10 @@ import { useAuth } from '../context/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRole?: 'student' | 'teacher';
+  allowedRoles?: ('student' | 'teacher' | 'admin')[];
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRole }) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
   const { session, profile, loading } = useAuth();
   const location = useLocation();
 
@@ -19,7 +19,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRole && profile && profile.role !== allowedRole) {
+  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     // 역할이 안맞으면 메인으로 튕기기
     return <Navigate to="/" replace />;
   }

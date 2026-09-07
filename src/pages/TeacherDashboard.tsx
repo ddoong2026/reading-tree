@@ -259,7 +259,7 @@ const TeacherDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-purple-50 p-8">
       <header className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-purple-900">선생님 대시보드</h1>
+        <h1 className="text-3xl font-bold text-purple-900">선생님/관리자 대시보드</h1>
         <div className="flex gap-4 items-center">
           <button 
             onClick={checkApiModels}

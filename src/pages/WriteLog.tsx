@@ -22,7 +22,8 @@ const WriteLog: React.FC = () => {
   const [currentLogId, setCurrentLogId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';
 
   // STT 더미 핸들러
   const handleToggleRecord = () => {
@@ -161,7 +162,7 @@ const WriteLog: React.FC = () => {
       <div className="w-full max-w-2xl">
         <header className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-green-900">새 독서록 쓰기</h1>
-          <Link to="/student" className="text-green-700 hover:underline">취소</Link>
+          <Link to={dashboardPath} className="text-green-700 hover:underline">취소</Link>
         </header>
 
         <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8">
@@ -292,7 +293,6 @@ const WriteLog: React.FC = () => {
               {feedback}
             </p>
             
-            
             <div className="mt-4 flex gap-3 justify-end">
               <button 
                 onClick={() => setIsEditModalOpen(true)}
@@ -300,7 +300,7 @@ const WriteLog: React.FC = () => {
               >
                 내 글 다시 고치기
               </button>
-              <Link to="/student" className="px-6 py-2 bg-white text-green-700 font-bold rounded-full shadow-sm hover:bg-green-50">
+              <Link to={dashboardPath} className="px-6 py-2 bg-white text-green-700 font-bold rounded-full shadow-sm hover:bg-green-50">
                 대시보드로 돌아가기
               </Link>
             </div>

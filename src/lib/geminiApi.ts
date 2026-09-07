@@ -44,8 +44,16 @@ export const generateReadingFeedback = async (
     return { feedbackText: data.feedbackText, success: data.success };
   } catch (error: any) {
     console.error("AI feedback error:", error);
+    
+    let errorMessage = error.message;
+    if (errorMessage.includes('503')) {
+      errorMessage = "현재 AI 서버 접속자가 많아 일시적으로 지연되고 있어요. 잠시 후 다시 '다 썼어요!' 버튼을 눌러주세요!";
+    } else {
+      errorMessage = `에러 발생: ${errorMessage} (선생님께 이 메시지를 알려주세요!)`;
+    }
+
     return { 
-      feedbackText: `에러 발생: ${error.message} (선생님께 이 메시지를 알려주세요!)`, 
+      feedbackText: errorMessage,
       success: false
     };
   }

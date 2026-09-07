@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action, textContent, hasImage, base64Image, mimeType } = req.body;
     
     const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+    const fallbackModels = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-pro"];
 
     if (action === 'generateFeedback') {
       const defaultPrompt = `
@@ -42,9 +42,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         prompt += "\n\n(참고: 학생이 글과 함께 정성스럽게 그린 그림도 제출했어!)";
       }
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return res.status(200).json({ feedbackText: response.text(), success: true });
+      let lastError: any = null;
+      for (const modelName of fallbackModels) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          return res.status(200).json({ feedbackText: response.text(), success: true });
+        } catch (error: any) {
+          console.warn(`[${modelName}] feedback failed:`, error.message);
+          lastError = error;
+        }
+      }
+      throw lastError;
     
     } else if (action === 'extractText') {
       if (!base64Image) {
@@ -64,9 +74,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       };
 
-      const result = await model.generateContent([prompt, imagePart]);
-      const response = await result.response;
-      return res.status(200).json({ text: response.text().trim() });
+      let lastError: any = null;
+      for (const modelName of fallbackModels) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent([prompt, imagePart]);
+          const response = await result.response;
+          return res.status(200).json({ text: response.text().trim() });
+        } catch (error: any) {
+          console.warn(`[${modelName}] OCR failed:`, error.message);
+          lastError = error;
+        }
+      }
+      throw lastError;
     
     } else {
       return res.status(400).json({ error: 'Unknown action' });
