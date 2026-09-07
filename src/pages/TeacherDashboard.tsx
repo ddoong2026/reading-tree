@@ -55,8 +55,33 @@ const TeacherDashboard: React.FC = () => {
   // 모달 상태
   const [viewLog, setViewLog] = useState<ReadingLog | null>(null);
 
+  // 필터 상태
+  const [filterType, setFilterType] = useState<string>('all');
+
   // 동적 반 목록 추출
   const distinctClasses = Array.from(new Set(students.map(s => s.class_id).filter(Boolean))) as string[];
+  const availableGrades = Array.from(new Set(students.map(s => {
+    if (!s.class_id) return null;
+    const parts = s.class_id.split('-');
+    return parts.length === 3 ? parts[1] : null;
+  }).filter(Boolean))) as string[];
+
+  // 학생 목록 필터링
+  const filteredStudents = students.filter(student => {
+    if (filterType === 'all') return true;
+    if (filterType === 'unassigned') return !student.class_id;
+    if (filterType.startsWith('grade-')) {
+      const targetGrade = filterType.replace('grade-', '');
+      if (!student.class_id) return false;
+      const parts = student.class_id.split('-');
+      return parts.length === 3 && parts[1] === targetGrade;
+    }
+    if (filterType.startsWith('class-')) {
+      const targetClass = filterType.replace('class-', '');
+      return student.class_id === targetClass;
+    }
+    return true;
+  });
 
   // 반 ID 포맷팅 함수 (예: "2026-1-1" -> "2026학년도 1학년 1반")
   const formatClassId = (cid: string) => {
@@ -257,6 +282,23 @@ const TeacherDashboard: React.FC = () => {
     }
   };
 
+  const handleDeleteStudent = async (id: string, name: string) => {
+    if (!window.confirm(`정말 [${name}] 학생의 계정을 삭제하시겠습니까?\n이 작업은 복구할 수 없으며 독서록 등 연관 데이터가 삭제될 수 있습니다.`)) return;
+
+    // users 테이블에서 삭제 (삭제 권한을 위해 supabaseAdmin 사용)
+    const { error } = await supabaseAdmin
+      .from('users')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert('학생 삭제 중 오류가 발생했습니다: ' + error.message);
+    } else {
+      setStudents(students.filter(s => s.id !== id));
+      alert(`[${name}] 학생 계정이 삭제되었습니다.`);
+    }
+  };
+
   const handleUpdateStudentClass = async (studentId: string, newClassId: string) => {
     // RLS 정책 때문에 선생님 계정으로 학생의 users 테이블을 업데이트하려면 supabaseAdmin(서비스 롤)을 사용해야 합니다.
     const { data, error } = await supabaseAdmin
@@ -307,24 +349,27 @@ const TeacherDashboard: React.FC = () => {
   todayStart.setHours(0, 0, 0, 0);
   const todayLogsCount = allLogs.filter(log => new Date(log.created_at) >= todayStart).length;
 
-  // API 모델 진단 함수
+  // API 모델 진단 함수 (안전하게 서버리스 함수를 통해 점검)
   const checkApiModels = async () => {
-    const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!API_KEY || API_KEY === 'your_api_key_here') {
-      alert('Vercel에 VITE_GEMINI_API_KEY가 설정되어 있지 않습니다.');
-      return;
-    }
-    
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'checkModels' }),
+      });
+      
+      const data = await response.json();
+      
       if (!response.ok) {
-        const err = await response.text();
-        alert(`API 키 권한 에러 (${response.status}):\n${err}`);
+        if (data.feedbackText) {
+          alert(`[설정 오류]\n${data.feedbackText}`);
+        } else {
+          alert(`[API 호출 오류]\n${data.error}`);
+        }
         return;
       }
-      const data = await response.json();
-      const modelNames = data.models.map((m: any) => m.name).join('\n');
-      alert(`사용 가능한 모델 목록:\n${modelNames}`);
+      
+      alert(`✅ API 연동 정상 작동 중!\n\n사용 가능한 모델 수: ${data.models.length}개\n가장 안정적인 상태입니다.`);
     } catch (error: any) {
       alert(`통신 에러:\n${error.message}`);
     }
@@ -481,7 +526,31 @@ const TeacherDashboard: React.FC = () => {
 
         {/* 학생 목록 및 관리 섹션 */}
         <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col h-full">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">학생 관리</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">학생 관리</h2>
+            <select 
+              value={filterType} 
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 font-medium"
+            >
+              <option value="all">전체보기</option>
+              {availableGrades.length > 0 && (
+                <optgroup label="학년별">
+                  {availableGrades.sort().map(g => (
+                    <option key={`grade-${g}`} value={`grade-${g}`}>{g}학년 전체</option>
+                  ))}
+                </optgroup>
+              )}
+              {distinctClasses.length > 0 && (
+                <optgroup label="반별 (상세)">
+                  {distinctClasses.sort().map(cid => (
+                    <option key={`class-${cid}`} value={`class-${cid}`}>{formatClassId(cid)}</option>
+                  ))}
+                </optgroup>
+              )}
+              <option value="unassigned">미지정 학생</option>
+            </select>
+          </div>
           <div className="overflow-y-auto flex-1 max-h-[400px]">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -496,10 +565,10 @@ const TeacherDashboard: React.FC = () => {
               <tbody>
                 {loadingData ? (
                   <tr><td colSpan={5} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
-                ) : students.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-8 text-gray-500 italic">아직 등록된 학생이 없습니다.</td></tr>
+                ) : filteredStudents.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-8 text-gray-500 italic">조건에 맞는 학생이 없습니다.</td></tr>
                 ) : (
-                  students.map(student => {
+                  filteredStudents.map(student => {
                     const studentLogsCount = allLogs.filter(log => log.user_id === student.id).length;
                     return (
                       <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
@@ -529,12 +598,22 @@ const TeacherDashboard: React.FC = () => {
                           </select>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <button 
-                            onClick={() => handlePasswordReset(student.name)}
-                            className="px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-bold transition-colors"
-                          >
-                            비밀번호 초기화
-                          </button>
+                          <div className="flex justify-center gap-2">
+                            <button 
+                              onClick={() => handlePasswordReset(student.name)}
+                              className="px-3 py-1 bg-yellow-50 text-yellow-600 hover:bg-yellow-100 rounded-md text-xs font-bold transition-colors"
+                              title="비밀번호 초기화 방법 안내"
+                            >
+                              비밀번호 초기화
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteStudent(student.id, student.name)}
+                              className="px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-bold transition-colors"
+                              title="학생 계정 삭제"
+                            >
+                              삭제
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

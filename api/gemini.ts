@@ -88,6 +88,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       throw lastError;
     
+    } else if (action === 'checkModels') {
+      try {
+        // 백엔드에서 직접 모델 목록을 조회하여 API 키 정상 여부 확인
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
+        if (!response.ok) {
+          const err = await response.text();
+          return res.status(response.status).json({ error: `API 키 권한 에러: ${err}` });
+        }
+        const data = await response.json();
+        const modelNames = data.models.map((m: any) => m.name);
+        return res.status(200).json({ success: true, models: modelNames });
+      } catch (error: any) {
+        return res.status(500).json({ error: `통신 에러: ${error.message}` });
+      }
     } else {
       return res.status(400).json({ error: 'Unknown action' });
     }
