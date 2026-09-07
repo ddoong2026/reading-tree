@@ -125,24 +125,24 @@ const StudentDashboard: React.FC = () => {
     
     if (!window.confirm("1 포인트를 사용하여 이 아이템을 구매하시겠습니까?")) return;
 
-    const column = `item_${itemType}`;
+    const column = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
     const newStats = { 
       ...userStats, 
       points: userStats.points - 1, 
-      [column]: userStats[column as keyof UserStats] + 1 
+      [column]: userStats[column] + 1 
     };
 
     setUserStats(newStats);
 
     await supabase.from('users').update({ 
       points: newStats.points,
-      [column]: newStats[column as keyof UserStats]
+      [column]: newStats[column]
     }).eq('id', targetUserId);
   };
 
   const handleUseItem = async (itemType: 'water' | 'sun' | 'wind') => {
-    const column = `item_${itemType}`;
-    const currentCount = userStats[column as keyof UserStats];
+    const column = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
+    const currentCount = userStats[column];
     
     if (currentCount <= 0) {
       alert("아이템이 부족합니다! 상점에서 먼저 구매해주세요.");
@@ -158,7 +158,7 @@ const StudentDashboard: React.FC = () => {
     setUserStats(newStats);
 
     await supabase.from('users').update({ 
-      [column]: newStats[column as keyof UserStats],
+      [column]: newStats[column],
       plant_growth: newStats.plant_growth
     }).eq('id', targetUserId);
     
