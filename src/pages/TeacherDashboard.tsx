@@ -47,6 +47,7 @@ const TeacherDashboard: React.FC = () => {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   
   // 프롬프트 상태
   const [aiPrompt, setAiPrompt] = useState('');
@@ -280,6 +281,29 @@ const TeacherDashboard: React.FC = () => {
     } else {
       setFeedbacks(feedbacks.filter(f => f.id !== id));
     }
+  };
+
+  const handleBulkDeleteStudents = async () => {
+    if (selectedStudentIds.length === 0) return;
+    if (!window.confirm(`선택한 ${selectedStudentIds.length}명의 학생 계정을 삭제하시겠습니까?\n이 작업은 복구할 수 없으며 연관 데이터가 모두 삭제됩니다.`)) return;
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const id of selectedStudentIds) {
+      const { error } = await supabase.rpc('delete_user_account', { target_user_id: id });
+      if (error) failCount++;
+      else successCount++;
+    }
+
+    if (failCount > 0) {
+      alert(`${successCount}명 삭제 완료, ${failCount}명 삭제 실패.\n(Supabase SQL 쿼리 설정이나 권한을 확인해주세요.)`);
+    } else {
+      alert(`${successCount}명의 학생 계정이 모두 삭제되었습니다.`);
+    }
+
+    setStudents(students.filter(s => !selectedStudentIds.includes(s.id)));
+    setSelectedStudentIds([]);
   };
 
   const handleDeleteStudent = async (id: string, name: string) => {
@@ -524,7 +548,18 @@ const TeacherDashboard: React.FC = () => {
         {/* 학생 목록 및 관리 섹션 */}
         <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col h-full">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">학생 관리</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold text-gray-800">학생 관리</h2>
+              {selectedStudentIds.length > 0 && (
+                <button
+                  onClick={handleBulkDeleteStudents}
+                  className="px-3 py-1.5 bg-red-500 text-white font-bold rounded-lg shadow-sm hover:bg-red-600 transition-colors text-sm flex items-center gap-1"
+                >
+                  <Trash2 size={14} />
+                  선택 삭제 ({selectedStudentIds.length})
+                </button>
+              )}
+            </div>
             <select 
               value={filterType} 
               onChange={(e) => setFilterType(e.target.value)}
@@ -552,6 +587,20 @@ const TeacherDashboard: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b-2 border-gray-100 sticky top-0 bg-white z-10">
+                  <th className="py-3 px-4 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                      checked={filteredStudents.length > 0 && selectedStudentIds.length === filteredStudents.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedStudentIds(filteredStudents.map(s => s.id));
+                        } else {
+                          setSelectedStudentIds([]);
+                        }
+                      }}
+                    />
+                  </th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">아이디 (학번)</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">가입일</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">작성한 독서록</th>
@@ -561,14 +610,28 @@ const TeacherDashboard: React.FC = () => {
               </thead>
               <tbody>
                 {loadingData ? (
-                  <tr><td colSpan={5} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
                 ) : filteredStudents.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-8 text-gray-500 italic">조건에 맞는 학생이 없습니다.</td></tr>
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-500 italic">조건에 맞는 학생이 없습니다.</td></tr>
                 ) : (
                   filteredStudents.map(student => {
                     const studentLogsCount = allLogs.filter(log => log.user_id === student.id).length;
                     return (
-                      <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <tr key={student.id} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedStudentIds.includes(student.id) ? 'bg-purple-50/50' : ''}`}>
+                        <td className="py-3 px-4 text-center">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                            checked={selectedStudentIds.includes(student.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedStudentIds([...selectedStudentIds, student.id]);
+                              } else {
+                                setSelectedStudentIds(selectedStudentIds.filter(id => id !== student.id));
+                              }
+                            }}
+                          />
+                        </td>
                         <td 
                           className="py-3 px-4 font-medium text-purple-600 cursor-pointer hover:underline"
                           onClick={() => handleViewStudentDashboard(student)}
