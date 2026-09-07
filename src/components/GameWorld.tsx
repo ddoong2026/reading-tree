@@ -7,8 +7,9 @@ import * as THREE from 'three';
 
 import { TreeModel } from './world3d/TreeModel';
 import { CharacterModel } from './world3d/CharacterModel';
-import { PetModel } from './world3d/PetModel';
+import { PlantModel } from './world3d/PlantModel';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 // 완전한 단색(흰색) 구름 컴포넌트
 const SimpleCloud = ({ position, scale = 1 }: { position: [number, number, number], scale?: number }) => (
@@ -60,33 +61,54 @@ const GameWorld: React.FC = () => {
   const initialLevel = classId === 'class-3' ? 1 : 3;
   const [treeLevel] = useState(initialLevel);
 
+  const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, isFlower: boolean, position: [number, number, number] }[]>([]);
+
+  React.useEffect(() => {
+    const fetchPlants = async () => {
+      // 1. Fetch all users
+      const { data: usersData } = await supabase.from('users').select('id, name, plant_growth');
+      // 2. Fetch all reading logs
+      const { data: logsData } = await supabase.from('reading_logs').select('user_id, category');
+      
+      if (usersData && logsData) {
+        // filter out users without logs or growth
+        const activeUsers = usersData.filter(user => 
+          (user.plant_growth && user.plant_growth > 0) || 
+          logsData.some(log => log.user_id === user.id)
+        );
+
+        const plants = activeUsers.map((user, index) => {
+          const userLogs = logsData.filter(log => log.user_id === user.id);
+          const uniqueCategories = new Set(userLogs.map(log => log.category || '000'));
+          const isFlower = uniqueCategories.size >= 10;
+          
+          // Generate position around the tree
+          const angle = (index / activeUsers.length) * Math.PI * 2 + (Math.random() * 0.5);
+          const radius = 4 + Math.random() * 8;
+          const x = Math.cos(angle) * radius;
+          const z = Math.sin(angle) * radius;
+          
+          return {
+            id: user.id,
+            name: user.name,
+            growth: user.plant_growth || 0,
+            isFlower,
+            position: [x, 0, z] as [number, number, number]
+          };
+        });
+        setStudentsPlants(plants);
+      }
+    };
+    fetchPlants();
+  }, [classId]);
+
   // 바닥(땅) 클릭 핸들러
   const handleGroundClick = (event: ThreeEvent<PointerEvent>) => {
     if (controlMode === 'keyboard') return; // 키보드 모드일 때는 클릭 이동 무시
     setCharacterTarget(event.point.clone());
   };
 
-  const petsList = React.useMemo(() => {
-    const pets: React.ReactNode[] = [];
-    const petTypes: Array<string> = ['Meshy_AI_Character_output (1)'];
-    
-    let count = 1;
-    if (classId === 'class-2') count = 2;
-    if (classId === 'class-3') count = 1;
 
-    for (let i = 0; i < count; i++) {
-      const type = petTypes[Math.floor(Math.random() * petTypes.length)];
-      const charX = 0;
-      const charZ = 8;
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 2 + Math.random() * 4;
-      const x = charX + Math.cos(angle) * radius;
-      const z = charZ + Math.sin(angle) * radius;
-      
-      pets.push(<PetModel key={i} type={type} initialPosition={[x, 0, z]} />);
-    }
-    return pets;
-  }, [classId]);
 
   const grassData = React.useMemo(() => {
     const data: { position: [number, number, number], scaleY: number }[] = [];
@@ -127,7 +149,16 @@ const GameWorld: React.FC = () => {
           {/* 에셋 렌더링 */}
           <CharacterModel targetPosition={characterTarget} controlMode={controlMode} />
           
-          {petsList}
+          {studentsPlants.map(plant => (
+            <group key={plant.id} position={plant.position}>
+              <PlantModel growth={plant.growth} isFlower={plant.isFlower} />
+              <Html position={[0, 2, 0]} center zIndexRange={[100, 0]}>
+                <div className="px-2 py-1 bg-white/80 backdrop-blur-sm rounded-lg shadow-sm text-xs font-bold text-gray-700 whitespace-nowrap pointer-events-none">
+                  {plant.name}의 식물
+                </div>
+              </Html>
+            </group>
+          ))}
           
           <Instances limit={50} castShadow={false} receiveShadow={false}>
             <boxGeometry args={[0.2, 1, 0.2]} />

@@ -4,10 +4,12 @@ import { Mic, Image as ImageIcon, Send, Volume2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { generateReadingFeedback, extractTextFromImage } from '../lib/geminiApi';
+import { KDC_CATEGORIES } from '../lib/kdc';
 
 const WriteLog: React.FC = () => {
   const [text, setText] = useState('');
   const [bookTitle, setBookTitle] = useState('');
+  const [category, setCategory] = useState('000');
   const [isRecording, setIsRecording] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   
@@ -154,12 +156,22 @@ const WriteLog: React.FC = () => {
       const { data: insertedData, error } = await supabase.from('reading_logs').insert({
         user_id: user.id,
         book_title: bookTitle,
+        category: category,
         text_content: text,
         image_url: uploadedImageUrl,
         ai_feedback: aiResponse
       }).select().single();
 
       if (error) throw error;
+      
+      // 5. 포인트 지급 (사용자 정보 업데이트)
+      try {
+        const { data: userData } = await supabase.from('users').select('points').eq('id', user.id).single();
+        const currentPoints = userData?.points || 0;
+        await supabase.from('users').update({ points: currentPoints + 1 }).eq('id', user.id);
+      } catch (e) {
+        console.error("포인트 업데이트 실패:", e);
+      }
       
       setCurrentLogId(insertedData.id);
       setFeedback(aiResponse);
@@ -211,6 +223,23 @@ const WriteLog: React.FC = () => {
 
         <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8">
           <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">어떤 분야의 책인가요?</label>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+              {KDC_CATEGORIES.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setCategory(c.id)}
+                  className={`py-2 px-1 rounded-xl text-sm font-bold transition-all border-2 ${
+                    category === c.id 
+                      ? `${c.bgColor} text-white border-transparent shadow-md scale-105` 
+                      : `bg-white ${c.color} border-gray-100 hover:border-gray-300`
+                  }`}
+                >
+                  {c.id} {c.name}
+                </button>
+              ))}
+            </div>
+            
             <label className="block text-gray-700 font-semibold mb-2">어떤 책을 읽었나요?</label>
             <input 
               type="text" 
