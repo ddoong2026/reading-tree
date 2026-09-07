@@ -96,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const err = await response.text();
           return res.status(response.status).json({ error: `API 키 권한 에러: ${err}` });
         }
-        const data = await response.json();
+        const data: any = await response.json();
         const modelNames = data.models.map((m: any) => m.name);
         return res.status(200).json({ success: true, models: modelNames });
       } catch (error: any) {
