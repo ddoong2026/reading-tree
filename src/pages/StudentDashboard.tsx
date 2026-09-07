@@ -35,6 +35,11 @@ const StudentDashboard: React.FC = () => {
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null });
 
+  // 건의사항 관련 상태
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
   const isTeacherView = !!studentId && profile?.role === 'teacher';
   const targetUserId = isTeacherView ? studentId : user?.id;
 
@@ -178,6 +183,28 @@ const StudentDashboard: React.FC = () => {
     alert("식물에게 아이템을 주었습니다! 식물이 조금 성장했어요.");
   };
 
+  const handleSubmitFeedback = async () => {
+    if (!feedbackText.trim()) return;
+    setIsSubmittingFeedback(true);
+    
+    try {
+      const { error } = await supabase.from('student_feedbacks').insert([
+        { user_id: targetUserId, content: feedbackText.trim() }
+      ]);
+      
+      if (error) throw error;
+      
+      alert("의견이 성공적으로 전달되었습니다! 선생님과 개발자가 참고할게요.");
+      setIsFeedbackModalOpen(false);
+      setFeedbackText('');
+    } catch (err: any) {
+      console.error(err);
+      alert("건의사항 제출에 실패했습니다: " + err.message);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
 
 
   // KDC 읽은 카테고리 집합
@@ -204,6 +231,12 @@ const StudentDashboard: React.FC = () => {
           <Link to="/teacher" className="text-blue-600 hover:underline font-bold mt-2">교사 대시보드로 돌아가기</Link>
         ) : (
           <div className="flex gap-4">
+            <button 
+              onClick={() => setIsFeedbackModalOpen(true)}
+              className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold shadow-sm hover:bg-indigo-200 transition-colors"
+            >
+              💌 개발자/선생님께 건의하기
+            </button>
             <Link to="/world" className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold shadow-sm hover:bg-green-600 transition-colors">🌳 숲으로 돌아가기</Link>
             <Link to="/" className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold shadow-sm hover:bg-blue-200 transition-colors">🏠 홈으로 돌아가기</Link>
           </div>
@@ -444,6 +477,42 @@ const StudentDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* 건의사항 모달 */}
+      {isFeedbackModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-8 relative">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">💌 개발자/선생님께 건의하기</h2>
+            <p className="text-gray-500 text-sm mb-6">
+              앱을 사용하면서 불편했던 점, 추가되었으면 하는 기능, 혹은 하고 싶은 말을 자유롭게 남겨주세요.
+              <br/>작성한 내용은 선생님과 관리자만 볼 수 있습니다.
+            </p>
+
+            <textarea
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="여기에 의견을 적어주세요..."
+              className="w-full h-40 p-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none bg-gray-50 mb-6"
+            />
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setIsFeedbackModalOpen(false); setFeedbackText(''); }}
+                className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                disabled={isSubmittingFeedback}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSubmitFeedback}
+                disabled={isSubmittingFeedback || !feedbackText.trim()}
+                className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
+              >
+                {isSubmittingFeedback ? '전송 중...' : '전송하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

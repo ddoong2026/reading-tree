@@ -55,6 +55,18 @@ const GameWorld: React.FC = () => {
   const [characterTarget, setCharacterTarget] = useState<THREE.Vector3 | null>(null);
   const [controlMode, setControlMode] = useState<'click' | 'keyboard'>('click');
   
+  const formatClassId = (cid: string | null | undefined) => {
+    if (!cid) return '전체';
+    const parts = cid.split('-');
+    if (parts.length === 3) {
+      return `${parts[0]}학년도 ${parts[1]}학년 ${parts[2]}반`;
+    }
+    if (cid === 'class-1') return '새싹 1반';
+    if (cid === 'class-2') return '햇살 2반';
+    if (cid === 'class-3') return '푸른 3반';
+    return cid;
+  };
+  
   const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';
   
   // 나무 레벨업 테스트용 상태
@@ -312,7 +324,7 @@ const GameWorld: React.FC = () => {
             ← 숲(월드맵)으로
           </Link>
           <div className="px-6 py-2 bg-green-600 text-white font-black rounded-full shadow-lg border-2 border-green-400 text-lg">
-            {classId === 'class-1' ? '새싹 1반' : classId === 'class-2' ? '햇살 2반' : '푸른 3반'}의 독서 나무
+            {formatClassId(classId)}의 독서 나무
           </div>
         </div>
         

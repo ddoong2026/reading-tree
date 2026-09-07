@@ -21,8 +21,17 @@ interface ReadingLog {
   users?: { name: string };
 }
 
+interface Feedback {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  users?: { name: string };
+}
+
 const TeacherDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [schoolYear, setSchoolYear] = useState(new Date().getFullYear().toString());
   const [grade, setGrade] = useState('1');
   const [classNum, setClassNum] = useState('1');
   const [endNumber, setEndNumber] = useState('30');
@@ -35,6 +44,7 @@ const TeacherDashboard: React.FC = () => {
   // 실 데이터 상태
   const [students, setStudents] = useState<Student[]>([]);
   const [allLogs, setAllLogs] = useState<ReadingLog[]>([]);
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   
@@ -44,6 +54,21 @@ const TeacherDashboard: React.FC = () => {
 
   // 모달 상태
   const [viewLog, setViewLog] = useState<ReadingLog | null>(null);
+
+  // 동적 반 목록 추출
+  const distinctClasses = Array.from(new Set(students.map(s => s.class_id).filter(Boolean))) as string[];
+
+  // 반 ID 포맷팅 함수 (예: "2026-1-1" -> "2026학년도 1학년 1반")
+  const formatClassId = (cid: string) => {
+    const parts = cid.split('-');
+    if (parts.length === 3) {
+      return `${parts[0]}학년도 ${parts[1]}학년 ${parts[2]}반`;
+    }
+    if (cid === 'class-1') return '새싹 1반';
+    if (cid === 'class-2') return '햇살 2반';
+    if (cid === 'class-3') return '푸른 3반';
+    return cid;
+  };
 
   // 데이터 불러오기
   const fetchData = async () => {
@@ -68,7 +93,16 @@ const TeacherDashboard: React.FC = () => {
     if (logError) console.error("Error fetching logs:", logError);
     else setAllLogs((logData as any) || []);
 
-    // 3. AI 프롬프트 가져오기
+    // 3. 학생 건의사항 가져오기
+    const { data: feedbackData, error: feedbackError } = await supabase
+      .from('student_feedbacks')
+      .select('id, user_id, content, created_at, users(name)')
+      .order('created_at', { ascending: false });
+
+    if (feedbackError) console.error("Error fetching feedbacks:", feedbackError);
+    else setFeedbacks((feedbackData as any) || []);
+
+    // 4. AI 프롬프트 가져오기
     const { data: promptData, error: promptError } = await supabase
       .from('app_settings')
       .select('value')
@@ -162,6 +196,7 @@ const TeacherDashboard: React.FC = () => {
           id: userId,
           role: 'student',
           name: name,
+          class_id: `${schoolYear}-${g}-${c}` // 학년도-학년-반 형식으로 기본 반 저장
         });
 
         if (dbError) {
@@ -204,6 +239,21 @@ const TeacherDashboard: React.FC = () => {
     } else {
       setAllLogs(allLogs.filter(log => log.id !== id));
       alert('독서록이 삭제되었습니다.');
+    }
+  };
+
+  const handleDeleteFeedback = async (id: string) => {
+    if (!window.confirm("이 건의사항을 삭제하시겠습니까?")) return;
+    
+    const { error } = await supabase
+      .from('student_feedbacks')
+      .delete()
+      .eq('id', id);
+      
+    if (error) {
+      alert("삭제 실패: " + error.message);
+    } else {
+      setFeedbacks(feedbacks.filter(f => f.id !== id));
     }
   };
 
@@ -332,7 +382,17 @@ const TeacherDashboard: React.FC = () => {
           </p>
 
           <div className="flex flex-col gap-5">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">학년도</label>
+                <input 
+                  type="text" 
+                  value={schoolYear}
+                  onChange={(e) => setSchoolYear(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                  disabled={batchLoading}
+                />
+              </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">학년</label>
                 <input 
@@ -463,9 +523,9 @@ const TeacherDashboard: React.FC = () => {
                             className="p-1 border border-gray-200 rounded text-sm text-gray-700 focus:outline-none focus:border-purple-400"
                           >
                             <option value="">미지정</option>
-                            <option value="class-1">새싹 1반</option>
-                            <option value="class-2">햇살 2반</option>
-                            <option value="class-3">푸른 3반</option>
+                            {distinctClasses.map(cid => (
+                              <option key={cid} value={cid}>{formatClassId(cid)}</option>
+                            ))}
                           </select>
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -611,6 +671,40 @@ const TeacherDashboard: React.FC = () => {
           >
             {isSavingPrompt ? '저장 중...' : '프롬프트 저장하기'}
           </button>
+        </div>
+      </div>
+
+      {/* 학생 건의사항 확인 섹션 */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm mt-8">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+          💌 학생 건의사항 확인
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {feedbacks.length === 0 ? (
+            <div className="col-span-1 md:col-span-2 text-center py-8 text-gray-500 italic bg-gray-50 rounded-xl">
+              아직 등록된 건의사항이 없습니다.
+            </div>
+          ) : (
+            feedbacks.map(f => (
+              <div key={f.id} className="bg-gray-50 p-5 rounded-xl border border-gray-100 relative group">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-bold text-gray-800">{f.users?.name || '알 수 없음'}</span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(f.created_at).toLocaleString('ko-KR')}
+                  </span>
+                </div>
+                <p className="text-gray-700 whitespace-pre-wrap text-sm">{f.content}</p>
+                <button
+                  onClick={() => handleDeleteFeedback(f.id)}
+                  className="absolute top-4 right-4 p-1.5 text-gray-300 hover:text-red-500 bg-white rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="건의사항 삭제"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
