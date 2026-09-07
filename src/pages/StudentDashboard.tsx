@@ -21,6 +21,7 @@ interface UserStats {
   item_sun: number;
   item_wind: number;
   plant_growth: number;
+  class_id: string | null;
 }
 
 const StudentDashboard: React.FC = () => {
@@ -32,7 +33,7 @@ const StudentDashboard: React.FC = () => {
   const [studentName, setStudentName] = useState<string>('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0 });
+  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null });
 
   const isTeacherView = !!studentId && profile?.role === 'teacher';
   const targetUserId = isTeacherView ? studentId : user?.id;
@@ -56,7 +57,7 @@ const StudentDashboard: React.FC = () => {
     };
 
     const fetchUserStats = async () => {
-      const { data } = await supabase.from('users').select('name, points, item_water, item_sun, item_wind, plant_growth').eq('id', targetUserId).single();
+      const { data } = await supabase.from('users').select('name, points, item_water, item_sun, item_wind, plant_growth, class_id').eq('id', targetUserId).single();
       if (data) {
         if (isTeacherView) setStudentName(data.name || '');
         setUserStats({
@@ -64,7 +65,8 @@ const StudentDashboard: React.FC = () => {
           item_water: data.item_water || 0,
           item_sun: data.item_sun || 0,
           item_wind: data.item_wind || 0,
-          plant_growth: data.plant_growth || 0
+          plant_growth: data.plant_growth || 0,
+          class_id: data.class_id || null
         });
       }
     };
@@ -163,20 +165,44 @@ const StudentDashboard: React.FC = () => {
     alert("식물에게 아이템을 주었습니다! 식물이 조금 성장했어요.");
   };
 
+  const handleUpdateClass = async (newClassId: string) => {
+      if (isTeacherView) return;
+      setUserStats(prev => ({ ...prev, class_id: newClassId }));
+      await supabase.from('users').update({ class_id: newClassId }).eq('id', targetUserId);
+      alert('반 설정이 변경되었습니다.');
+  };
+
   // KDC 읽은 카테고리 집합
   const readCategories = new Set(logs.map(log => log.category || '000'));
   const isFlower = readCategories.size >= 10;
 
   return (
     <div className="min-h-screen bg-blue-50 p-8">
-      <header className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-blue-900">
-          {isTeacherView ? `${studentName} 학생의 독서 기록` : '내 독서 기록'}
-        </h1>
+      <header className="flex justify-between items-start mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-blue-900 mb-2">
+            {isTeacherView ? `${studentName} 학생의 독서 기록` : '내 독서 기록'}
+          </h1>
+          {!isTeacherView && (
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-bold text-gray-700 bg-white px-3 py-1.5 rounded-lg shadow-sm">🌱 나의 소속 반</label>
+              <select 
+                value={userStats.class_id || ''} 
+                onChange={(e) => handleUpdateClass(e.target.value)}
+                className="p-1.5 border-2 border-green-200 rounded-lg bg-white shadow-sm font-bold text-green-700 focus:outline-none focus:border-green-400 cursor-pointer"
+              >
+                <option value="">반을 선택하세요</option>
+                <option value="class-1">새싹 1반</option>
+                <option value="class-2">햇살 2반</option>
+                <option value="class-3">푸른 3반</option>
+              </select>
+            </div>
+          )}
+        </div>
         {isTeacherView ? (
-          <Link to="/teacher" className="text-blue-600 hover:underline font-bold">교사 대시보드로 돌아가기</Link>
+          <Link to="/teacher" className="text-blue-600 hover:underline font-bold mt-2">교사 대시보드로 돌아가기</Link>
         ) : (
-          <Link to="/" className="text-blue-600 hover:underline font-bold">홈으로 돌아가기</Link>
+          <Link to="/" className="text-blue-600 hover:underline font-bold mt-2">홈으로 돌아가기</Link>
         )}
       </header>
 

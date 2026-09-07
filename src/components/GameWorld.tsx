@@ -63,10 +63,34 @@ const GameWorld: React.FC = () => {
 
   const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, isFlower: boolean, position: [number, number, number] }[]>([]);
 
+  // 식물 상호작용 상태
+  const [hoveredPlantId, setHoveredPlantId] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [selectedStudentLogs, setSelectedStudentLogs] = useState<any[]>([]);
+  const [isLogsLoading, setIsLogsLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (!selectedStudentId) {
+      setSelectedStudentLogs([]);
+      return;
+    }
+    const fetchLogs = async () => {
+      setIsLogsLoading(true);
+      const { data } = await supabase.from('reading_logs').select('*').eq('user_id', selectedStudentId).order('created_at', { ascending: false });
+      setSelectedStudentLogs(data || []);
+      setIsLogsLoading(false);
+    };
+    fetchLogs();
+  }, [selectedStudentId]);
+
   React.useEffect(() => {
     const fetchPlants = async () => {
       // 1. Fetch all users
-      const { data: usersData } = await supabase.from('users').select('id, name, plant_growth');
+      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id');
+      if (classId) {
+        userQuery = userQuery.eq('class_id', classId);
+      }
+      const { data: usersData } = await userQuery;
       // 2. Fetch all reading logs
       const { data: logsData } = await supabase.from('reading_logs').select('user_id, category');
       
@@ -150,13 +174,21 @@ const GameWorld: React.FC = () => {
           <CharacterModel targetPosition={characterTarget} controlMode={controlMode} />
           
           {studentsPlants.map(plant => (
-            <group key={plant.id} position={plant.position}>
+            <group 
+              key={plant.id} 
+              position={plant.position}
+              onPointerOver={(e) => { e.stopPropagation(); setHoveredPlantId(plant.id); document.body.style.cursor = 'pointer'; }}
+              onPointerOut={(e) => { e.stopPropagation(); setHoveredPlantId(null); document.body.style.cursor = 'auto'; }}
+              onClick={(e) => { e.stopPropagation(); setSelectedStudentId(plant.id); }}
+            >
               <PlantModel growth={plant.growth} isFlower={plant.isFlower} />
-              <Html position={[0, 2, 0]} center zIndexRange={[100, 0]}>
-                <div className="px-2 py-1 bg-white/80 backdrop-blur-sm rounded-lg shadow-sm text-xs font-bold text-gray-700 whitespace-nowrap pointer-events-none">
-                  {plant.name}의 식물
-                </div>
-              </Html>
+              {hoveredPlantId === plant.id && (
+                <Html position={[0, 2, 0]} center zIndexRange={[100, 0]}>
+                  <div className="px-3 py-2 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border-2 border-green-300 text-sm font-bold text-green-800 whitespace-nowrap cursor-pointer animate-fade-in transition-transform hover:scale-110">
+                    🌱 {plant.name}의 식물 구경하기
+                  </div>
+                </Html>
+              )}
             </group>
           ))}
           
@@ -234,9 +266,65 @@ const GameWorld: React.FC = () => {
 
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 bg-black/60 text-white px-8 py-3 rounded-full backdrop-blur-sm pointer-events-none text-base font-medium shadow-lg animate-pulse whitespace-nowrap">
         {controlMode === 'click' 
-          ? '👆 마우스로 땅을 클릭하여 이동하고, 드래그하여 시점을 돌려보세요!'
-          : '⌨️ W,A,S,D(이동) / Shift(달리기) / Space(점프)'}
+          ? '👆 마우스로 땅을 클릭하여 이동하고, 친구의 식물을 클릭하여 독서록을 구경해보세요!'
+          : '⌨️ W,A,S,D(이동) / Shift(달리기) / Space(점프) - 마우스로 식물 클릭 가능'}
       </div>
+
+      {/* 독서록 구경하기 모달 */}
+      {selectedStudentId && (
+        <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-green-50">
+              <h2 className="text-2xl font-bold text-green-800 flex items-center gap-2">
+                <span>🌱</span> 
+                {studentsPlants.find(p => p.id === selectedStudentId)?.name} 친구의 독서 기록
+              </h2>
+              <button 
+                onClick={() => setSelectedStudentId(null)}
+                className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors shadow-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+              {isLogsLoading ? (
+                <div className="flex justify-center items-center h-full text-gray-500 font-medium">독서록을 불러오는 중...</div>
+              ) : selectedStudentLogs.length === 0 ? (
+                <div className="flex justify-center items-center h-full text-gray-500 italic">아직 작성한 독서록이 없어요.</div>
+              ) : (
+                <div className="space-y-6">
+                  {selectedStudentLogs.map(log => (
+                    <div key={log.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-xl font-bold text-gray-800">{log.book_title}</h3>
+                        <span className="text-sm text-gray-500">{new Date(log.created_at).toLocaleDateString()}</span>
+                      </div>
+                      
+                      {log.image_url && (
+                        <img src={log.image_url} alt="책 이미지" className="w-full max-w-sm rounded-xl mb-4 shadow-sm border border-gray-100" />
+                      )}
+                      
+                      {log.text_content && (
+                        <div className="bg-gray-50 p-4 rounded-xl text-gray-700 whitespace-pre-wrap leading-relaxed border border-gray-100">
+                          {log.text_content}
+                        </div>
+                      )}
+                      
+                      {log.ai_feedback && (
+                        <div className="mt-4 bg-purple-50 p-4 rounded-xl border border-purple-100">
+                          <h4 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h4>
+                          <p className="text-purple-700 text-sm whitespace-pre-wrap">{log.ai_feedback}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
