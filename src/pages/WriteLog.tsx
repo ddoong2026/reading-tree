@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Mic, Image as ImageIcon, Send, Volume2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -25,15 +25,59 @@ const WriteLog: React.FC = () => {
   const { user, profile } = useAuth();
   const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';
 
-  // STT 더미 핸들러
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ko-KR';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        recognition.onresult = (event: any) => {
+          let currentTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              currentTranscript += event.results[i][0].transcript;
+            }
+          }
+          if (currentTranscript) {
+            setText((prev) => prev + (prev ? ' ' : '') + currentTranscript.trim());
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          setIsRecording(false);
+        };
+
+        recognition.onend = () => {
+          setIsRecording(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+  }, []);
+
   const handleToggleRecord = () => {
-    setIsRecording(!isRecording);
-    if (!isRecording) {
-      // 실제 Web Speech API 연동은 추후 구현
-      setTimeout(() => {
-        setText((prev) => prev + (prev ? ' ' : '') + '오늘 읽은 책은 정말 재미있었어요.');
-        setIsRecording(false);
-      }, 2000);
+    if (!recognitionRef.current) {
+      alert("이 브라우저에서는 음성 인식 기능을 지원하지 않습니다. 크롬(Chrome) Edge, Safari 등의 지원 브라우저를 이용해주세요.");
+      return;
+    }
+
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
