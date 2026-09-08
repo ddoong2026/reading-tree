@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { TreeModel } from './world3d/TreeModel';
 import { CharacterModel } from './world3d/CharacterModel';
 import { PlantModel } from './world3d/PlantModel';
+import { ItemEffectModel } from './world3d/ItemEffectModel';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 
@@ -73,7 +74,7 @@ const GameWorld: React.FC = () => {
   const initialLevel = classId === 'class-3' ? 1 : 3;
   const [treeLevel] = useState(initialLevel);
 
-  const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, isFlower: boolean, position: [number, number, number] }[]>([]);
+  const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number] }[]>([]);
 
   // 심기 모드 관련 상태
   const [isPlantingMode, setIsPlantingMode] = useState(false);
@@ -88,6 +89,9 @@ const GameWorld: React.FC = () => {
 
   const [myInventory, setMyInventory] = useState<{ water: number; sun: number; wind: number; plantGrowth: number; plantPosX: number | null }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null });
 
+  // 애니메이션 이펙트 상태
+  const [activeEffects, setActiveEffects] = useState<{ id: string, type: 'water' | 'sun' | 'wind', position: [number, number, number] }[]>([]);
+
   const handleUseItemInWorld = async (itemType: 'water' | 'sun' | 'wind') => {
     if (!profile) return;
     if (myInventory.plantGrowth === 0 || myInventory.plantPosX == null) {
@@ -101,6 +105,7 @@ const GameWorld: React.FC = () => {
     }
 
     const column = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
+    const usedColumn = `used_${itemType}` as 'used_water' | 'used_sun' | 'used_wind';
     const newGrowth = myInventory.plantGrowth + 1;
     const newCount = currentCount - 1;
 
@@ -112,12 +117,30 @@ const GameWorld: React.FC = () => {
     }));
 
     setStudentsPlants(prev => prev.map(p => 
-      p.id === profile.id ? { ...p, growth: newGrowth } : p
+      p.id === profile.id ? { ...p, growth: newGrowth, [usedColumn]: (p[usedColumn as keyof typeof p] as number || 0) + 1 } : p
     ));
+
+    // 애니메이션 이펙트 추가 (3초 뒤 자동 제거)
+    const effectId = Date.now().toString() + Math.random().toString();
+    const me = studentsPlants.find(p => p.id === profile.id);
+    const plantPos = me ? me.position : [myInventory.plantPosX, 0, myInventory.plantPosZ || 0];
+    
+    setActiveEffects(prev => [...prev, { id: effectId, type: itemType, position: plantPos as [number, number, number] }]);
+    setTimeout(() => {
+      setActiveEffects(prev => prev.filter(e => e.id !== effectId));
+    }, 3000);
+
+    // RPC를 쓰거나 단일 쿼리로 처리하기 애매하므로 프론트에서 먼저 현재 used 값을 읽거나,
+    // 가장 안전한 방법은 RLS 정책에 막히지 않도록 기존 데이터를 기반으로 +1 하여 보냅니다.
+    // 기존 meData를 가져왔을 때 used 값을 어딘가에 저장해야 합니다.
+    // 가장 간단하게는 usersData에서 찾아서 씁니다.
+    const { data: meData } = await supabase.from('users').select(usedColumn).eq('id', profile.id).single();
+    const currentUsed = meData ? meData[usedColumn] || 0 : 0;
 
     const { error } = await supabase.from('users').update({
       [column]: newCount,
-      plant_growth: newGrowth
+      plant_growth: newGrowth,
+      [usedColumn]: currentUsed + 1
     }).eq('id', profile.id);
 
     if (error) {
@@ -142,7 +165,7 @@ const GameWorld: React.FC = () => {
   React.useEffect(() => {
     const fetchPlants = async () => {
       // 1. Fetch all users for the current class
-      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind');
+      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind');
       if (classId) {
         userQuery = userQuery.eq('class_id', classId);
       }
@@ -150,7 +173,7 @@ const GameWorld: React.FC = () => {
 
       // 1-b. 항상 현재 로그인한 유저의 정보를 가져와서 병합 (교사나 반이 없는 유저가 숲에 왔을 때 인벤토리/심기 권한을 주기 위함)
       if (profile?.id) {
-        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind').eq('id', profile.id).single();
+        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind').eq('id', profile.id).single();
         if (meData) {
           // meData를 가져오자마자 무조건 내 인벤토리를 업데이트!
           setMyInventory({ 
@@ -196,6 +219,9 @@ const GameWorld: React.FC = () => {
             id: user.id,
             name: user.name,
             growth: user.plant_growth || 0,
+            usedWater: user.used_water || 0,
+            usedSun: user.used_sun || 0,
+            usedWind: user.used_wind || 0,
             isFlower,
             position: [user.plant_position_x, 0, user.plant_position_z] as [number, number, number]
           };
@@ -311,7 +337,13 @@ const GameWorld: React.FC = () => {
                 if (!isPlantingMode) setSelectedStudentId(plant.id); 
               }}
             >
-              <PlantModel growth={plant.growth} isFlower={plant.isFlower} />
+              <PlantModel 
+                growth={plant.growth} 
+                isFlower={plant.isFlower} 
+                usedWater={plant.usedWater}
+                usedSun={plant.usedSun}
+                usedWind={plant.usedWind}
+              />
               {!isPlantingMode && hoveredPlantId === plant.id && (
                 <Html position={[0, 2, 0]} center zIndexRange={[100, 0]}>
                   <div className="px-3 py-2 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border-2 border-green-300 text-sm font-bold text-green-800 whitespace-nowrap cursor-pointer animate-fade-in transition-transform hover:scale-110">
@@ -320,6 +352,11 @@ const GameWorld: React.FC = () => {
                 </Html>
               )}
             </group>
+          ))}
+          
+          {/* 애니메이션 렌더링 */}
+          {activeEffects.map(effect => (
+            <ItemEffectModel key={effect.id} position={effect.position} type={effect.type} />
           ))}
           
           {isPlantingMode && plantPreviewPos && (

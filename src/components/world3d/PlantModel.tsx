@@ -6,10 +6,20 @@ import * as THREE from 'three';
 interface PlantModelProps {
   position?: [number, number, number];
   growth: number;
+  usedWater?: number;
+  usedSun?: number;
+  usedWind?: number;
   isFlower: boolean;
 }
 
-export const PlantModel: React.FC<PlantModelProps> = ({ position = [0, 0, 0], growth, isFlower }) => {
+export const PlantModel: React.FC<PlantModelProps> = ({ 
+  position = [0, 0, 0], 
+  growth, 
+  usedWater = 0,
+  usedSun = 0,
+  usedWind = 0,
+  isFlower 
+}) => {
   const groupRef = useRef<THREE.Group>(null);
   
   useFrame((state) => {
@@ -24,10 +34,12 @@ export const PlantModel: React.FC<PlantModelProps> = ({ position = [0, 0, 0], gr
   // Stage 1: Sprout (growth 1-3)
   // Stage 2: Stem with leaves (growth 4-6)
   // Stage 3: Bud (growth 7-8)
-  // Stage 4: Flower (growth >= 9 or isFlower)
+  // Stage 4: Flower (usedWater >= 3 && usedSun >= 3 && usedWind >= 3, or isFlower fallback)
   
   let stage = 0;
-  if (isFlower || growth >= 9) {
+  const isItemFlower = usedWater >= 3 && usedSun >= 3 && usedWind >= 3;
+
+  if (isItemFlower || isFlower) {
     stage = 4;
   } else if (growth >= 7) {
     stage = 3;
