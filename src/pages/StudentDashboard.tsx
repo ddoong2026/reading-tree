@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { Trash2, Droplets, Sun, Wind, ShoppingBag, Info } from 'lucide-react';
+import { Trash2, ShoppingBag, Info } from 'lucide-react';
 import { KDC_CATEGORIES } from '../lib/kdc';
 
 interface ReadingLog {
