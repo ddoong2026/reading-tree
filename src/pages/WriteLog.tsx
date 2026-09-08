@@ -10,6 +10,8 @@ const WriteLog: React.FC = () => {
   const [text, setText] = useState('');
   const [bookTitle, setBookTitle] = useState('');
   const [category, setCategory] = useState('000');
+  const [questCategory, setQuestCategory] = useState<string | null>(null);
+  const [hasCheckedQuest, setHasCheckedQuest] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   
@@ -63,6 +65,15 @@ const WriteLog: React.FC = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      const q = localStorage.getItem(`quest_${user.id}`);
+      setQuestCategory(q);
+      if (q) setCategory(q);
+      setHasCheckedQuest(true);
+    }
+  }, [user]);
 
   const handleToggleRecord = () => {
     if (!recognitionRef.current) {
@@ -164,17 +175,28 @@ const WriteLog: React.FC = () => {
 
       if (error) throw error;
       
-      // 5. 포인트 지급 (사용자 정보 업데이트)
-      try {
-        const { data: userData } = await supabase.from('users').select('points').eq('id', user.id).single();
-        const currentPoints = userData?.points || 0;
-        await supabase.from('users').update({ points: currentPoints + 1 }).eq('id', user.id);
-      } catch (e) {
-        console.error("포인트 업데이트 실패:", e);
+      // 5. 포인트 지급 조건 확인 (70점 이상)
+      const match = aiResponse.match(/\[SCORE:\s*(\d+)\]/);
+      const score = match ? parseInt(match[1], 10) : 100;
+      let earnedPoint = false;
+
+      if (score >= 70) {
+        try {
+          const { data: userData } = await supabase.from('users').select('points').eq('id', user.id).single();
+          const currentPoints = userData?.points || 0;
+          await supabase.from('users').update({ points: currentPoints + 1 }).eq('id', user.id);
+          earnedPoint = true;
+        } catch (e) {
+          console.error("포인트 업데이트 실패:", e);
+        }
       }
       
       setCurrentLogId(insertedData.id);
-      setFeedback(aiResponse);
+      
+      const resultMessage = earnedPoint 
+        ? "\n\n🎉 통과! 1 포인트를 얻었습니다!" 
+        : "\n\n⚠️ 아쉽게도 통과 기준(70점)에 미치지 못해 포인트를 받지 못했어요. 내용을 더 정성껏 써보세요!";
+      setFeedback(aiResponse + resultMessage);
     } catch (error: any) {
       alert('오류가 발생했습니다: ' + error.message);
       console.error(error);
@@ -221,24 +243,38 @@ const WriteLog: React.FC = () => {
           <Link to={dashboardPath} className="text-green-700 hover:underline">취소</Link>
         </header>
 
-        <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8">
-          <div className="mb-6">
-            <label className="block text-gray-700 font-semibold mb-2">어떤 분야의 책인가요?</label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
-              {KDC_CATEGORIES.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setCategory(c.id)}
-                  className={`py-2 px-1 rounded-xl text-sm font-bold transition-all border-2 ${
-                    category === c.id 
-                      ? `${c.bgColor} text-white border-transparent shadow-md scale-105` 
-                      : `bg-white ${c.color} border-gray-100 hover:border-gray-300`
-                  }`}
-                >
-                  {c.id} {c.name}
-                </button>
-              ))}
-            </div>
+        {hasCheckedQuest && !questCategory ? (
+          <div className="bg-white rounded-3xl shadow-sm p-8 text-center">
+            <div className="text-6xl mb-4">🎯</div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">현재 진행 중인 퀘스트가 없어요!</h2>
+            <p className="text-gray-600 mb-8">대시보드에서 룰렛을 돌려 오늘의 독서 퀘스트를 받아주세요.</p>
+            <Link to={dashboardPath} className="px-6 py-3 bg-green-500 text-white font-bold rounded-xl shadow-md hover:bg-green-600 transition-colors">
+              대시보드로 돌아가기
+            </Link>
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8">
+            <div className="mb-6">
+              <label className="block text-gray-700 font-semibold mb-2">어떤 분야의 책인가요?</label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+                {KDC_CATEGORIES.map(c => (
+                  <button
+                    key={c.id}
+                    disabled={true}
+                    className={`py-2 px-1 rounded-xl text-sm font-bold transition-all border-2 ${
+                      category === c.id 
+                        ? `${c.bgColor} text-white border-transparent shadow-md scale-105` 
+                        : `bg-white ${c.color} border-gray-100 opacity-50`
+                    }`}
+                  >
+                    {c.id} {c.name}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="text-sm text-green-600 mb-4 bg-green-50 p-2 rounded-lg inline-block font-medium">
+                💡 퀘스트로 받은 분야의 책만 쓸 수 있어요!
+              </div>
             
             <label className="block text-gray-700 font-semibold mb-2">어떤 책을 읽었나요?</label>
             <input 
@@ -326,17 +362,18 @@ const WriteLog: React.FC = () => {
             )}
           </div>
 
-          <button 
-            onClick={handleSubmit}
-            disabled={isSubmitting || !bookTitle || (!text && !imageFile)}
-            className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-2xl shadow-md flex justify-center items-center gap-2 transition-colors text-lg disabled:opacity-50"
-          >
-            <Send size={20} />
-            {isSubmitting 
-              ? (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출 중...' : '저장 중...') 
-              : (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출하기' : '다 썼어요! (제출하기)')}
-          </button>
-        </div>
+            <button 
+              onClick={handleSubmit}
+              disabled={isSubmitting || !bookTitle || (!text && !imageFile)}
+              className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-2xl shadow-md flex justify-center items-center gap-2 transition-colors text-lg disabled:opacity-50"
+            >
+              <Send size={20} />
+              {isSubmitting 
+                ? (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출 중...' : '저장 중...') 
+                : (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출하기' : '다 썼어요! (제출하기)')}
+            </button>
+          </div>
+        )}
 
         {/* AI 피드백 모달/영역 */}
         {feedback && (
