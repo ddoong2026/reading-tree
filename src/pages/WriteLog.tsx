@@ -205,6 +205,12 @@ const WriteLog: React.FC = () => {
       const aiResult = await generateReadingFeedback(text, !!uploadedImageUrl);
       const aiResponse = aiResult.feedbackText;
 
+      if (!aiResult.success) {
+        setIsSubmitting(false);
+        alert('AI 피드백 오류: ' + aiResponse);
+        return;
+      }
+
       // 4. DB 저장
       let insertedData;
       
