@@ -2,7 +2,7 @@ import React, { useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, ContactShadows, Instances, Instance, Html, useProgress } from '@react-three/drei';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
 
 import { TreeModel } from './world3d/TreeModel';
@@ -52,9 +52,17 @@ const CanvasLoader = () => {
 
 const GameWorld: React.FC = () => {
   const { classId } = useParams<{ classId: string }>();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [characterTarget, setCharacterTarget] = useState<THREE.Vector3 | null>(null);
   const [controlMode, setControlMode] = useState<'click' | 'keyboard'>('click');
+
+  React.useEffect(() => {
+    if (classId === 'class-3' && profile?.role !== 'admin') {
+      alert("이 숲은 관리자만 들어갈 수 있습니다.");
+      navigate('/map');
+    }
+  }, [classId, profile, navigate]);
   
   const formatClassId = (cid: string | null | undefined) => {
     if (!cid) return '전체';
@@ -62,19 +70,19 @@ const GameWorld: React.FC = () => {
     if (parts.length === 3) {
       return `${parts[0]}학년도 ${parts[1]}학년 ${parts[2]}반`;
     }
-    if (cid === 'class-1') return '새싹 1반';
-    if (cid === 'class-2') return '햇살 2반';
-    if (cid === 'class-3') return '푸른 3반';
+    if (cid === 'class-1') return '5학년 1반';
+    if (cid === 'class-2') return '5학년 2반';
+    if (cid === 'class-3') return '관리자의 숲';
     return cid;
   };
   
   const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';
   
-  // 나무 레벨업 테스트용 상태
-  const initialLevel = classId === 'class-3' ? 1 : 3;
-  const [treeLevel] = useState(initialLevel);
+  const [treeLevel, setTreeLevel] = useState(1);
+  const [treeExp, setTreeExp] = useState(0);
+  const [treeNextExp, setTreeNextExp] = useState(10);
 
-  const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number] }[]>([]);
+  const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number], seedBoughtAt?: string | null, seedLevel: number }[]>([]);
 
   // 심기 모드 관련 상태
   const [isPlantingMode, setIsPlantingMode] = useState(false);
@@ -86,6 +94,7 @@ const GameWorld: React.FC = () => {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedStudentLogs, setSelectedStudentLogs] = useState<any[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
+  const [showAllLogs, setShowAllLogs] = useState(false);
 
   const [myInventory, setMyInventory] = useState<{ water: number; sun: number; wind: number; plantGrowth: number; plantPosX: number | null, plantPosZ: number | null }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null, plantPosZ: null });
 
@@ -133,13 +142,15 @@ const GameWorld: React.FC = () => {
     // RPC를 쓰거나 단일 쿼리로 처리하기 애매하므로 프론트에서 먼저 현재 used 값을 읽거나,
     // 가장 안전한 방법은 RLS 정책에 막히지 않도록 기존 데이터를 기반으로 +1 하여 보냅니다.
     // 기존 meData를 가져왔을 때 used 값을 어딘가에 저장해야 합니다.
-    const { data: meData } = await supabase.from('users').select(usedColumn).eq('id', profile.id).single();
+    const { data: meData } = await supabase.from('users').select(`${usedColumn}, tree_exp`).eq('id', profile.id).single();
     const currentUsed = meData ? (meData as any)[usedColumn] || 0 : 0;
+    const currentTreeExp = meData ? (meData as any).tree_exp || 0 : 0;
 
     const { error } = await supabase.from('users').update({
       [column]: newCount,
       plant_growth: newGrowth,
-      [usedColumn]: currentUsed + 1
+      [usedColumn]: currentUsed + 1,
+      tree_exp: currentTreeExp + 1
     }).eq('id', profile.id);
 
     if (error) {
@@ -154,25 +165,30 @@ const GameWorld: React.FC = () => {
     }
     const fetchLogs = async () => {
       setIsLogsLoading(true);
-      const { data } = await supabase.from('reading_logs').select('*').eq('user_id', selectedStudentId).order('created_at', { ascending: false });
+      const student = studentsPlants.find(p => p.id === selectedStudentId);
+      let q = supabase.from('reading_logs').select('*').eq('user_id', selectedStudentId).order('created_at', { ascending: false });
+      
+      if (!showAllLogs && student && student.seedBoughtAt) {
+        q = q.gte('created_at', student.seedBoughtAt);
+      }
+      
+      const { data } = await q;
       setSelectedStudentLogs(data || []);
       setIsLogsLoading(false);
     };
     fetchLogs();
-  }, [selectedStudentId]);
+  }, [selectedStudentId, showAllLogs, studentsPlants]);
 
   React.useEffect(() => {
     const fetchPlants = async () => {
-      // 1. Fetch all users for the current class
-      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind');
+      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp');
       if (classId) {
         userQuery = userQuery.eq('class_id', classId);
       }
       let { data: usersData } = await userQuery;
 
-      // 1-b. 항상 현재 로그인한 유저의 정보를 가져와서 병합 (교사나 반이 없는 유저가 숲에 왔을 때 인벤토리/심기 권한을 주기 위함)
       if (profile?.id) {
-        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind').eq('id', profile.id).single();
+        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp').eq('id', profile.id).single();
         if (meData) {
           // meData를 가져오자마자 무조건 내 인벤토리를 업데이트!
           setMyInventory({ 
@@ -186,10 +202,14 @@ const GameWorld: React.FC = () => {
 
           if (!usersData) usersData = [];
           const existingIndex = usersData.findIndex(u => u.id === meData.id);
-          if (existingIndex !== -1) {
-            usersData[existingIndex] = meData;
-          } else {
-            usersData.push(meData);
+          if (meData.class_id === classId || !classId) {
+            if (existingIndex !== -1) {
+              usersData[existingIndex] = meData;
+            } else {
+              usersData.push(meData);
+            }
+          } else if (existingIndex !== -1) {
+             usersData.splice(existingIndex, 1);
           }
         }
       }
@@ -206,10 +226,29 @@ const GameWorld: React.FC = () => {
           validLogs.some(log => log.user_id === user.id)
         );
 
+        // Tree Exp Calculation
+        let totalTreeExp = 0;
+        usersData.forEach(u => {
+          if (u.class_id === classId) {
+            totalTreeExp += (u.tree_exp || 0);
+          }
+        });
+        
+        let calcLevel = 1;
+        let expForNext = 10;
+        let currentExp = totalTreeExp;
+        while (currentExp >= expForNext) {
+          currentExp -= expForNext;
+          calcLevel++;
+          expForNext = calcLevel + 9;
+        }
+        setTreeLevel(calcLevel);
+        setTreeExp(currentExp);
+        setTreeNextExp(expForNext);
+
         const plants = activeUsers.map((user) => {
-          const userLogs = validLogs.filter(log => log.user_id === user.id);
-          const uniqueCategories = new Set(userLogs.map(log => log.category || '000'));
-          const isFlower = uniqueCategories.size >= 10;
+          const sLevel = user.seed_level || 1;
+          const isFlower = user.used_water >= sLevel && user.used_sun >= sLevel && user.used_wind >= sLevel && (user.plant_growth - 1) >= sLevel * 3;
 
           if (user.plant_position_x == null || user.plant_position_z == null) {
             return null; // 아직 심지 않음
@@ -223,7 +262,9 @@ const GameWorld: React.FC = () => {
             usedSun: user.used_sun || 0,
             usedWind: user.used_wind || 0,
             isFlower,
-            position: [user.plant_position_x, 0, user.plant_position_z] as [number, number, number]
+            position: [user.plant_position_x, 0, user.plant_position_z] as [number, number, number],
+            seedBoughtAt: user.seed_bought_at,
+            seedLevel: sLevel
           };
         }).filter(Boolean) as typeof studentsPlants;
         setStudentsPlants(plants);
@@ -282,7 +323,21 @@ const GameWorld: React.FC = () => {
     window.location.reload();
   };
 
-
+  const handleDeletePlant = async (studentId: string) => {
+    if (!window.confirm("이 식물을 삭제하시겠습니까?")) return;
+    const { error } = await supabase.from('users').update({
+      plant_position_x: null,
+      plant_position_z: null,
+      plant_growth: 0
+    }).eq('id', studentId);
+    if (error) {
+      alert("식물 삭제 중 오류가 발생했습니다.");
+    } else {
+      setStudentsPlants(prev => prev.filter(p => p.id !== studentId));
+      setSelectedStudentId(null);
+      alert("식물이 삭제되었습니다.");
+    }
+  };
 
   const grassData = React.useMemo(() => {
     const data: { position: [number, number, number], scaleY: number }[] = [];
@@ -343,6 +398,7 @@ const GameWorld: React.FC = () => {
                 usedWater={plant.usedWater}
                 usedSun={plant.usedSun}
                 usedWind={plant.usedWind}
+                seedLevel={plant.seedLevel}
               />
               {!isPlantingMode && hoveredPlantId === plant.id && (
                 <Html position={[0, 2, 0]} center zIndexRange={[100, 0]}>
@@ -534,12 +590,28 @@ const GameWorld: React.FC = () => {
                 <span>🌱</span> 
                 {studentsPlants.find(p => p.id === selectedStudentId)?.name} 친구의 독서 기록
               </h2>
-              <button 
-                onClick={() => setSelectedStudentId(null)}
-                className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors shadow-sm font-bold"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-3">
+                {profile?.role === 'admin' && (
+                  <button 
+                    onClick={() => handleDeletePlant(selectedStudentId)}
+                    className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-bold hover:bg-red-200 shadow-sm"
+                  >
+                    🗑️ 식물 삭제
+                  </button>
+                )}
+                <button 
+                  onClick={() => setShowAllLogs(!showAllLogs)}
+                  className="px-4 py-1.5 bg-white text-green-700 rounded-full text-sm font-bold border border-green-200 hover:bg-green-50 shadow-sm"
+                >
+                  {showAllLogs ? '🌱 이번 씨앗 기록만' : '📚 전체보기'}
+                </button>
+                <button 
+                  onClick={() => setSelectedStudentId(null)}
+                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors shadow-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50">

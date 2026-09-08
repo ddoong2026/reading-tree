@@ -153,9 +153,9 @@ const WorldMap: React.FC = () => {
 
   // 모의 반 데이터
   const classes = [
-    { id: 'class-1', name: '새싹 1반', treeLevel: 3, position: [0, 0, 10] as [number, number, number] },
-    { id: 'class-2', name: '햇살 2반', treeLevel: 2, position: [-35, 8, -25] as [number, number, number] },
-    { id: 'class-3', name: '푸른 3반', treeLevel: 1, position: [35, -6, -20] as [number, number, number] },
+    { id: 'class-1', name: '5학년 1반', treeLevel: 3, position: [0, 0, 10] as [number, number, number] },
+    { id: 'class-2', name: '5학년 2반', treeLevel: 2, position: [-35, 8, -25] as [number, number, number] },
+    { id: 'class-3', name: '관리자의 숲', treeLevel: 1, position: [35, -6, -20] as [number, number, number] },
   ];
 
   // 커서 스타일 변경

@@ -90,9 +90,9 @@ const TeacherDashboard: React.FC = () => {
     if (parts.length === 3) {
       return `${parts[0]}학년도 ${parts[1]}학년 ${parts[2]}반`;
     }
-    if (cid === 'class-1') return '새싹 1반';
-    if (cid === 'class-2') return '햇살 2반';
-    if (cid === 'class-3') return '푸른 3반';
+    if (cid === 'class-1') return '5학년 1반';
+    if (cid === 'class-2') return '5학년 2반';
+    if (cid === 'class-3') return '관리자의 숲';
     return cid;
   };
 

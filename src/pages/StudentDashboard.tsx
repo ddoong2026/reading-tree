@@ -23,6 +23,10 @@ interface UserStats {
   item_wind: number;
   plant_growth: number;
   class_id: string | null;
+  seed_level: number;
+  used_water: number;
+  used_sun: number;
+  used_wind: number;
 }
 
 const StudentDashboard: React.FC = () => {
@@ -34,7 +38,7 @@ const StudentDashboard: React.FC = () => {
   const [studentName, setStudentName] = useState<string>('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null });
+  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null, seed_level: 1, used_water: 0, used_sun: 0, used_wind: 0 });
 
   // 건의사항 관련 상태
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -64,7 +68,7 @@ const StudentDashboard: React.FC = () => {
           .order('created_at', { ascending: false }),
         supabase
           .from('users')
-          .select('name, points, item_water, item_sun, item_wind, plant_growth, class_id')
+          .select('name, points, item_water, item_sun, item_wind, plant_growth, class_id, seed_level, used_water, used_sun, used_wind')
           .eq('id', targetUserId)
           .single()
       ]);
@@ -84,7 +88,11 @@ const StudentDashboard: React.FC = () => {
           item_sun: d.item_sun || 0,
           item_wind: d.item_wind || 0,
           plant_growth: d.plant_growth || 0,
-          class_id: d.class_id || null
+          class_id: d.class_id || null,
+          seed_level: d.seed_level || 1,
+          used_water: d.used_water || 0,
+          used_sun: d.used_sun || 0,
+          used_wind: d.used_wind || 0
         }));
       }
       setLoading(false);
@@ -141,18 +149,30 @@ const StudentDashboard: React.FC = () => {
       return;
     }
     
-    if (userStats.plant_growth > 0) {
-      alert("이미 씨앗을 구매하셨습니다.");
+    // Check if they can buy a seed (must have no plant, or current plant must be a flower)
+    const isFlower = userStats.used_water >= userStats.seed_level && 
+                     userStats.used_sun >= userStats.seed_level && 
+                     userStats.used_wind >= userStats.seed_level &&
+                     (userStats.plant_growth - 1) >= userStats.seed_level * 3;
+
+    if (userStats.plant_growth > 0 && !isFlower) {
+      alert("씨앗은 꽃을 피운 후에만 새로 구매할 수 있습니다.");
       return;
     }
     
     if (!window.confirm("1 포인트를 사용하여 식물 씨앗을 구매하시겠습니까?")) return;
 
     const newPoints = userStats.points - 1;
+    const newSeedLevel = isFlower ? userStats.seed_level + 1 : userStats.seed_level;
 
     const { data, error } = await supabase.from('users').update({ 
       plant_growth: 1,
-      points: newPoints
+      points: newPoints,
+      seed_level: newSeedLevel,
+      seed_bought_at: new Date().toISOString(),
+      used_water: 0,
+      used_sun: 0,
+      used_wind: 0
     }).eq('id', targetUserId).select();
 
     if (error) {
@@ -168,10 +188,14 @@ const StudentDashboard: React.FC = () => {
     setUserStats(prev => ({ 
       ...prev, 
       points: newPoints, 
-      plant_growth: 1
+      plant_growth: 1,
+      seed_level: newSeedLevel,
+      used_water: 0,
+      used_sun: 0,
+      used_wind: 0
     }));
 
-    alert('씨앗을 구매했습니다! 숲으로 가서 심어주세요.');
+    alert(`레벨 ${newSeedLevel} 씨앗을 구매했습니다! 숲으로 가서 심어주세요.`);
   };
 
   const handleBuyItem = async (itemType: 'water' | 'sun' | 'wind') => {
@@ -308,8 +332,8 @@ const StudentDashboard: React.FC = () => {
           {!isTeacherView && userStats.class_id && (
             <div className="flex items-center gap-3">
               <label className="text-sm font-bold text-gray-700 bg-white px-3 py-1.5 rounded-lg shadow-sm">🌱 나의 소속 반: {
-                userStats.class_id === 'class-1' ? '새싹 1반' : 
-                userStats.class_id === 'class-2' ? '햇살 2반' : '푸른 3반'
+                userStats.class_id === 'class-1' ? '5학년 1반' : 
+                userStats.class_id === 'class-2' ? '5학년 2반' : '관리자의 숲'
               }</label>
             </div>
           )}
@@ -492,7 +516,7 @@ const StudentDashboard: React.FC = () => {
           <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-2xl shadow-sm border border-amber-100">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold text-amber-900 flex items-center gap-2">
-                <ShoppingBag size={20} /> 새싹 상점
+                <ShoppingBag size={20} /> 5학년 상점
               </h2>
               <div className="flex gap-2">
                 {profile?.role === 'teacher' && (

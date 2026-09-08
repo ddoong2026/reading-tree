@@ -10,6 +10,7 @@ interface PlantModelProps {
   usedSun?: number;
   usedWind?: number;
   isFlower: boolean;
+  seedLevel?: number;
 }
 
 export const PlantModel: React.FC<PlantModelProps> = ({ 
@@ -18,7 +19,8 @@ export const PlantModel: React.FC<PlantModelProps> = ({
   usedWater = 0,
   usedSun = 0,
   usedWind = 0,
-  isFlower 
+  isFlower,
+  seedLevel = 1
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   
@@ -50,7 +52,11 @@ export const PlantModel: React.FC<PlantModelProps> = ({
   }
 
   // 부드러운 성장을 위한 스케일 계산 (최소 0.6에서 1.2까지)
-  const baseScale = stage === 4 ? 1.2 : 0.6 + (growth / 9.0) * 0.6;
+  const baseScale = (stage === 4 ? 1.2 : 0.6 + (growth / 9.0) * 0.6) * (1 + (seedLevel - 1) * 0.2);
+
+  // 시드 레벨별 색상 지정
+  const petalColors = ["#f472b6", "#c084fc", "#60a5fa", "#34d399", "#fbbf24", "#f87171"];
+  const petalColor = petalColors[(seedLevel - 1) % petalColors.length];
 
   return (
     <group position={position} ref={groupRef} scale={[baseScale, baseScale, baseScale]}>
@@ -122,7 +128,7 @@ export const PlantModel: React.FC<PlantModelProps> = ({
                 position={[Math.cos(angle) * 0.4, Math.sin(angle) * 0.4, 0]}
                 scale={[1, 1, 0.2]}
               >
-                <meshStandardMaterial color="#f472b6" />
+                <meshStandardMaterial color={petalColor} />
               </Sphere>
             );
           })}
