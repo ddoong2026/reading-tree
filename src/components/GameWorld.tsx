@@ -116,7 +116,10 @@ const GameWorld: React.FC = () => {
         const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind').eq('id', profile.id).single();
         if (meData) {
           if (!usersData) usersData = [];
-          if (!usersData.some(u => u.id === meData.id)) {
+          const existingIndex = usersData.findIndex(u => u.id === meData.id);
+          if (existingIndex !== -1) {
+            usersData[existingIndex] = meData;
+          } else {
             usersData.push(meData);
           }
         }
