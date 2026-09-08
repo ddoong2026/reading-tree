@@ -125,7 +125,7 @@ const GameWorld: React.FC = () => {
       // 2. Fetch all reading logs
       const { data: logsData } = await supabase.from('reading_logs').select('user_id, category');
       
-      if (usersData && logsData) {
+      if (usersData) {
         const me = usersData.find(u => u.id === profile?.id);
         if (me) {
           setMyInventory({ 
@@ -137,14 +137,16 @@ const GameWorld: React.FC = () => {
           });
         }
 
+        const validLogs = logsData || [];
+
         // filter out users without logs or growth
         const activeUsers = usersData.filter(user => 
           (user.plant_growth && user.plant_growth > 0) || 
-          logsData.some(log => log.user_id === user.id)
+          validLogs.some(log => log.user_id === user.id)
         );
 
         const plants = activeUsers.map((user) => {
-          const userLogs = logsData.filter(log => log.user_id === user.id);
+          const userLogs = validLogs.filter(log => log.user_id === user.id);
           const uniqueCategories = new Set(userLogs.map(log => log.category || '000'));
           const isFlower = uniqueCategories.size >= 10;
 
