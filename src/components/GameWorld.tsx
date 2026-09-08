@@ -128,7 +128,13 @@ const GameWorld: React.FC = () => {
       if (usersData && logsData) {
         const me = usersData.find(u => u.id === profile?.id);
         if (me) {
-          setMyInventory({ water: me.item_water || 0, sun: me.item_sun || 0, wind: me.item_wind || 0 });
+          setMyInventory({ 
+            water: me.item_water || 0, 
+            sun: me.item_sun || 0, 
+            wind: me.item_wind || 0,
+            plantGrowth: me.plant_growth || 0,
+            plantPosX: me.plant_position_x
+          });
         }
 
         // filter out users without logs or growth
@@ -137,16 +143,10 @@ const GameWorld: React.FC = () => {
           logsData.some(log => log.user_id === user.id)
         );
 
-        let needsToPlant = false;
-
         const plants = activeUsers.map((user) => {
           const userLogs = logsData.filter(log => log.user_id === user.id);
           const uniqueCategories = new Set(userLogs.map(log => log.category || '000'));
           const isFlower = uniqueCategories.size >= 10;
-          
-          if (user.id === profile?.id && user.plant_growth && user.plant_growth > 0 && user.plant_position_x == null) {
-            needsToPlant = true;
-          }
 
           if (user.plant_position_x == null || user.plant_position_z == null) {
             return null; // 아직 심지 않음
@@ -161,7 +161,6 @@ const GameWorld: React.FC = () => {
           };
         }).filter(Boolean) as typeof studentsPlants;
         setStudentsPlants(plants);
-        setHasSeed(needsToPlant);
       }
     };
     fetchPlants();
@@ -206,7 +205,6 @@ const GameWorld: React.FC = () => {
     
     setIsPlantingMode(false);
     setPlantPreviewPos(null);
-    setHasSeed(false);
     alert("씨앗을 심었습니다! 이제 물을 주고 식물을 키워보세요.");
     window.location.reload();
   };
@@ -226,6 +224,9 @@ const GameWorld: React.FC = () => {
     }
     return data;
   }, []);
+
+  // 실제 씨앗 보유 여부 (상태에서 즉시 도출)
+  const actualHasSeed = myInventory.plantGrowth > 0 && myInventory.plantPosX == null;
 
   return (
     <div className="relative w-full h-screen bg-sky-200 overflow-hidden">
@@ -356,7 +357,7 @@ const GameWorld: React.FC = () => {
         </button>
 
         {/* 씨앗 심기 수동 트리거 */}
-        {hasSeed && !isPlantingMode && (
+        {actualHasSeed && !isPlantingMode && (
           <button
             onClick={() => setIsPlantingMode(true)}
             className="px-6 py-3 w-fit bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg border-2 border-emerald-300 transition-all flex items-center gap-2 mt-2 animate-bounce"
@@ -379,6 +380,10 @@ const GameWorld: React.FC = () => {
         <div className="flex flex-col gap-2 bg-white/90 backdrop-blur-sm p-4 rounded-2xl shadow-lg border-2 border-green-200 mt-2 w-fit">
           <h3 className="text-sm font-bold text-green-800">내 인벤토리</h3>
           <div className="flex gap-4">
+            <div className="flex items-center gap-1 font-bold text-amber-600">
+              <img src="/seed.png" alt="씨앗" className="w-6 h-6 object-contain drop-shadow-sm" /> 
+              <span className="text-xs">{actualHasSeed ? '1개 (미심음)' : (myInventory.plantGrowth > 0 ? '이미 심음' : '0개')}</span>
+            </div>
             <div className="flex items-center gap-1 font-bold text-blue-600">
               <img src="/water.png" alt="물" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span>x {myInventory.water}</span>
