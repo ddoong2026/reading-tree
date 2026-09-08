@@ -19,6 +19,12 @@ interface ReadingLog {
   ai_feedback: string;
   image_url: string | null;
   users?: { name: string };
+  edit_count?: number;
+  edit_days?: number;
+  daily_attempts?: number;
+  last_edit_date?: string;
+  revision_history?: any[];
+  score_improvement?: number;
 }
 
 interface Feedback {
@@ -113,7 +119,7 @@ const TeacherDashboard: React.FC = () => {
     // 2. 모든 독서록 가져오기 (이름 포함)
     const { data: logData, error: logError } = await supabase
       .from('reading_logs')
-      .select('id, user_id, book_title, created_at, text_content, ai_feedback, image_url, users(name)')
+      .select('id, user_id, book_title, created_at, text_content, ai_feedback, image_url, users(name), edit_count, edit_days, daily_attempts, last_edit_date, revision_history, score_improvement')
       .order('created_at', { ascending: false });
 
     if (logError) console.error("Error fetching logs:", logError);
@@ -140,6 +146,36 @@ const TeacherDashboard: React.FC = () => {
     }
 
     setLoadingData(false);
+  };
+
+  const handleBetaResetAll = async () => {
+    if (!window.confirm("정말로 모든 학생의 독서 기록, 건의사항, 식물 상태 등을 초기화하시겠습니까?\n이 작업은 베타 테스트용이며 복구할 수 없습니다.")) return;
+    if (window.prompt("초기화를 진행하려면 '초기화'라고 입력해주세요.") !== '초기화') {
+      alert('초기화가 취소되었습니다.');
+      return;
+    }
+
+    setLoadingData(true);
+    await supabase.from('reading_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('student_feedbacks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('users').update({
+      points: 0,
+      item_water: 0,
+      item_sun: 0,
+      item_wind: 0,
+      used_water: 0,
+      used_sun: 0,
+      used_wind: 0,
+      plant_growth: 0,
+      plant_position_x: null,
+      plant_position_z: null,
+      seed_level: 1,
+      seed_bought_at: null,
+      tree_exp: 0
+    }).neq('id', '00000000-0000-0000-0000-000000000000');
+
+    alert("초기화가 완료되었습니다.");
+    fetchData();
   };
 
   const handleSavePrompt = async () => {
@@ -401,6 +437,12 @@ const TeacherDashboard: React.FC = () => {
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-purple-900">선생님/관리자 대시보드</h1>
         <div className="flex gap-4 items-center">
+          <button
+            onClick={handleBetaResetAll}
+            className="px-4 py-2 bg-red-100 text-red-700 font-bold rounded-lg shadow-sm hover:bg-red-200 transition-colors text-sm"
+          >
+            ⚠️ 전체 기록 초기화
+          </button>
           <Link to="/student" className="px-4 py-2 bg-green-100 text-green-700 font-bold rounded-lg shadow-sm hover:bg-green-200 transition-colors text-sm">
             🌱 내 식물/상점 보기
           </Link>
@@ -723,15 +765,19 @@ const TeacherDashboard: React.FC = () => {
                 <th className="py-3 px-4 text-gray-500 font-semibold">작성 일시</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">책 제목</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">형태</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold">수정 횟수</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold">총 수정 일수</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold">상세 수정 내역</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold">점수 향상도</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold">AI 피드백 요약</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold text-center">관리</th>
               </tr>
             </thead>
             <tbody>
               {loadingData ? (
-                <tr><td colSpan={7} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
+                <tr><td colSpan={12} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
               ) : allLogs.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-8 text-gray-500 italic">아직 작성된 독서록이 없습니다.</td></tr>
+                <tr><td colSpan={12} className="text-center py-8 text-gray-500 italic">아직 작성된 독서록이 없습니다.</td></tr>
               ) : (
                 allLogs.map(log => (
                   <tr key={log.id} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedLogIds.includes(log.id) ? 'bg-purple-50/50' : ''}`}>
@@ -770,7 +816,18 @@ const TeacherDashboard: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600 truncate max-w-[300px]" title={log.ai_feedback}>
+                    <td className="py-3 px-4 text-sm text-gray-600">{log.edit_count || 0}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{log.edit_days ? `${log.edit_days}일` : '1일'}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      <button 
+                        onClick={() => setViewLog(log)}
+                        className="px-2 py-1 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded text-xs font-bold transition-colors"
+                      >
+                        상세 보기
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{log.score_improvement !== undefined && log.score_improvement !== null ? `${log.score_improvement > 0 ? '+' : ''}${log.score_improvement}점` : '-'}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600 truncate max-w-[200px]" title={log.ai_feedback}>
                       {log.ai_feedback || '피드백 없음'}
                     </td>
                     <td className="py-3 px-4 text-center">
@@ -890,6 +947,36 @@ const TeacherDashboard: React.FC = () => {
                 {viewLog.ai_feedback || <span className="text-gray-400 italic">피드백이 없습니다.</span>}
               </div>
             </div>
+
+            {viewLog.revision_history && viewLog.revision_history.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-bold text-gray-700 mb-2 flex justify-between items-center">
+                  <span>상세 수정 내역 (총 {viewLog.edit_days || 1}일 / {viewLog.edit_count || viewLog.revision_history.length}회 수정)</span>
+                </h3>
+                <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-100 border-b border-gray-200">
+                      <tr>
+                        <th className="py-2 px-3 text-gray-600 font-semibold">수정 차수</th>
+                        <th className="py-2 px-3 text-gray-600 font-semibold">소요 시간</th>
+                        <th className="py-2 px-3 text-gray-600 font-semibold">제출 일시</th>
+                        <th className="py-2 px-3 text-gray-600 font-semibold">점수</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewLog.revision_history.map((rev, idx) => (
+                        <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-white">
+                          <td className="py-2 px-3 font-medium text-gray-800">{rev.day}일차 {rev.attempt}차</td>
+                          <td className="py-2 px-3 text-gray-600">{rev.edit_time}초</td>
+                          <td className="py-2 px-3 text-gray-500 text-xs">{new Date(rev.timestamp).toLocaleString('ko-KR')}</td>
+                          <td className="py-2 px-3 font-bold text-purple-600">{rev.score}점</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 mt-8">
               <button 

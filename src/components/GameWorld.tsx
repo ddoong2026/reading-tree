@@ -58,7 +58,7 @@ const GameWorld: React.FC = () => {
   const [controlMode, setControlMode] = useState<'click' | 'keyboard'>('click');
 
   React.useEffect(() => {
-    if (classId === 'class-3' && profile?.role !== 'admin') {
+    if (classId === 'class-3' && profile?.role !== 'admin' && profile?.role !== 'teacher') {
       alert("이 숲은 관리자만 들어갈 수 있습니다.");
       navigate('/map');
     }
@@ -640,13 +640,6 @@ const GameWorld: React.FC = () => {
                       {log.text_content && (
                         <div className="bg-gray-50 p-4 rounded-xl text-gray-700 whitespace-pre-wrap leading-relaxed border border-gray-100">
                           {log.text_content}
-                        </div>
-                      )}
-                      
-                      {log.ai_feedback && (
-                        <div className="mt-4 bg-purple-50 p-4 rounded-xl border border-purple-100">
-                          <h4 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h4>
-                          <p className="text-purple-700 text-sm whitespace-pre-wrap">{log.ai_feedback}</p>
                         </div>
                       )}
                     </div>

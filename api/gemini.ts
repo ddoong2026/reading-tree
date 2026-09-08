@@ -24,26 +24,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const fallbackModels = ["gemini-3.6-flash"];
 
     if (action === 'generateFeedback') {
+      // 선생님이 교사 대시보드에 아무것도 입력하지 않았을 때 적용되는 기본 프롬프트입니다.
+      // (선생님이 대시보드에 입력하면 이 내용은 완전히 무시되고 선생님의 입력 내용이 우선 적용됩니다.)
       const defaultPrompt = `
-당신은 따뜻하고 다정한 초등학교 선생님입니다. 학생이 작성한 다음 독서록을 읽고 피드백을 작성해주세요.
-[학생의 독서록 내용]
-[학생글]
-
-다음 2가지 지침을 엄격하게 지켜서 작성하세요:
-1. 칭찬과 교정 (3~4문장): 독서록 내용에 대해 폭풍 칭찬과 공감을 해주고, 맞춤법이 틀렸다면 부드럽게 교정해주세요. (그림이 있다면 그림 칭찬 필수)
-2. 말투: 반드시 "~했어요", "~해요" 같은 다정하고 부드러운 말투를 사용하고, 이모지는 절대 사용하지 마세요.
+초등학교 5학년 학생의 독서록을 자동으로 평가하고 피드백하는 기능을 구현해주세요.
+(지시사항에 따라 평가하고, 반드시 약속된 JSON 형식으로만 결과를 반환해야 합니다.)
 `;
-      const systemConstraint = `
 
-[시스템 필수 지침 - 아래 내용은 어떠한 상황에서도 최우선으로 지켜야 합니다]
-1. 통과 기준: 욕설, 무의미한 단어 반복('ㅋㅋㅋ', '아아아')이 아니라면 무조건 100점을 부여하세요. 만약 내용이 너무 부실해서 70점 미만을 준다면, 어떤 점을 보충해서 다시 제출해야 할지 다정하게 안내하세요.
-2. 점수 출력 (매우 중요): 당신의 피드백 텍스트의 **맨 마지막 줄**에는 반드시, 예외 없이 "[SCORE: 점수]" 형식으로 점수만 출력해야 합니다. 다른 문장과 섞지 마세요. (예: [SCORE: 100])`;
+      // 시스템 필수 지침 (사용자 몰래 무조건 100점을 주거나 하는 조작 명령은 전부 삭제했습니다.)
+      // 오직 "반환 형식을 프론트엔드가 파싱할 수 있는 JSON으로 고정"하는 명령만 추가합니다.
+      const systemConstraint = `
+      
+[시스템 필수 형식 지침]
+당신은 위 지침(선생님이 입력한 프롬프트)을 완벽하게 따라야 합니다.
+그리고 응답은 반드시 마크다운(Markdown) 백틱(\`\`\`) 없이, 순수한 JSON 객체 형태로만 출력하세요. 
+다른 설명이나 인사말은 절대 추가하지 마세요.
+
+JSON 구조 예시:
+{
+  "total_score": 85,
+  "nodes": [
+    {
+      "id": "F1",
+      "name": "맞춤법·띄어쓰기·문장부호",
+      "max_score": 15,
+      "status": "충족",
+      "score": 15,
+      "evidence": "판정 근거...",
+      "feedback": "학생용 피드백..."
+    }
+  ],
+  "summary_feedback": {
+    "strength": "가장 잘한 점...",
+    "priority_improvements": ["보완할 점 1", "보완할 점 2"]
+  }
+}
+`;
 
       const template = (req.body.customPrompt || defaultPrompt) + systemConstraint;
-      let prompt = template.replace(/\[학생글\]/g, `"${textContent}"`);
+      let prompt = template + `\n\n[학생의 독서록 내용]\n"${textContent}"`;
       
       if (hasImage) {
-        prompt += "\n\n(참고: 학생이 글과 함께 정성스럽게 그린 그림도 제출했어!)";
+        prompt += "\n\n(참고: 학생이 글과 함께 정성스럽게 그림도 첨부했습니다.)";
       }
 
       let lastError: any = null;
@@ -52,7 +74,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const model = genAI.getGenerativeModel({ model: modelName });
           const result = await model.generateContent(prompt);
           const response = await result.response;
-          return res.status(200).json({ feedbackText: response.text(), success: true });
+          const text = response.text();
+          
+          try {
+            // JSON 파싱 시도 (마크다운 백틱 등이 포함되어 있다면 제거)
+            const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleanText);
+            
+            // 학생에게 보여줄 피드백 마크다운 조립
+            let feedback = `🌱 **잘한 점**:\n${parsed.summary_feedback.strength}\n\n`;
+            
+            if (parsed.summary_feedback.priority_improvements && parsed.summary_feedback.priority_improvements.length > 0) {
+              feedback += `✨ **보완할 점**:\n`;
+              parsed.summary_feedback.priority_improvements.forEach((imp: string) => {
+                feedback += `- ${imp}\n`;
+              });
+              feedback += `\n`;
+            }
+            
+            // 각 노드별 피드백 (부분 충족이거나 결손인 경우에만 팁으로 제공)
+            if (parsed.nodes && Array.isArray(parsed.nodes)) {
+              const needsImprovementNodes = parsed.nodes.filter((n: any) => n.status !== '충족');
+              if (needsImprovementNodes.length > 0) {
+                feedback += `📌 **선생님의 추가 팁**:\n`;
+                needsImprovementNodes.forEach((n: any) => {
+                  feedback += `[${n.name}]\n${n.feedback}\n\n`;
+                });
+              }
+            }
+            
+            // 마지막에 강제로 스코어 추가 (프론트엔드 호환용)
+            // 총점이 100점 만점으로 계산되어 나옴
+            const totalScore = typeof parsed.total_score === 'number' ? parsed.total_score : parseInt(parsed.total_score) || 0;
+            feedback += `\n[SCORE: ${totalScore}]`;
+            
+            return res.status(200).json({ feedbackText: feedback.trim(), success: true });
+          } catch(e) {
+             // JSON 파싱 실패 시, 원본 텍스트를 그대로 반환 (에러 방지용)
+             // 원본 텍스트 안에 [SCORE: X]가 없을 수 있으므로 0점으로 처리
+             let fallbackText = text;
+             if (!fallbackText.includes('[SCORE:')) {
+                fallbackText += '\n[SCORE: 0]';
+             }
+             console.warn("JSON Parsing Failed, falling back to raw text:", e);
+             return res.status(200).json({ feedbackText: fallbackText, success: true });
+          }
+
         } catch (error: any) {
           console.warn(`[${modelName}] feedback failed:`, error.message);
           lastError = error;

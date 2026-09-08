@@ -479,7 +479,7 @@ const StudentDashboard: React.FC = () => {
                         return (
                           <>
                             <div className="bg-purple-50 p-4 rounded-lg mt-4 border border-purple-100">
-                              <h4 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h4>
+                              <h4 className="text-sm font-bold text-purple-800 mb-2">선생님의 조언 ✨</h4>
                               <p className="text-purple-700 text-sm whitespace-pre-wrap leading-relaxed">{cleanFeedback}</p>
                             </div>
                             {canRetry && !isTeacherView && (

@@ -28,7 +28,13 @@ const WriteLog: React.FC = () => {
   const [isOcrDone, setIsOcrDone] = useState(false);
   const [currentLogId, setCurrentLogId] = useState<string | null>(null);
   const [attempts, setAttempts] = useState(1);
+  const [editDays, setEditDays] = useState(1);
+  const [dailyAttempts, setDailyAttempts] = useState(0);
+  const [lastEditDate, setLastEditDate] = useState<string | null>(null);
+  const [revisionHistory, setRevisionHistory] = useState<any[]>([]);
+  
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editStartTime, setEditStartTime] = useState<number>(Date.now());
   
   const { user, profile } = useAuth();
   const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';
@@ -84,7 +90,7 @@ const WriteLog: React.FC = () => {
       const fetchLog = async () => {
         const { data } = await supabase
           .from('reading_logs')
-          .select('book_title, category, text_content, image_url, ai_feedback, attempts')
+          .select('book_title, category, text_content, image_url, ai_feedback, attempts, edit_days, daily_attempts, last_edit_date, revision_history')
           .eq('id', editId)
           .single();
         if (data) {
@@ -92,6 +98,11 @@ const WriteLog: React.FC = () => {
           setCategory(data.category);
           setText(data.text_content || '');
           if (data.attempts) setAttempts(data.attempts);
+          if (data.edit_days) setEditDays(data.edit_days);
+          if (data.daily_attempts) setDailyAttempts(data.daily_attempts);
+          if (data.last_edit_date) setLastEditDate(data.last_edit_date);
+          if (data.revision_history) setRevisionHistory(data.revision_history);
+          
           if (data.image_url) {
             setImagePreview(data.image_url);
             setBase64Image(data.image_url);
@@ -161,8 +172,26 @@ const WriteLog: React.FC = () => {
       alert('로그인이 필요합니다.');
       return;
     }
-    if (attempts >= 3) {
-      alert('더 이상 이 독서록을 수정할 수 없습니다 (최대 3회 기회 소진). 새로운 독서록을 작성해주세요!');
+
+    const targetId = editId || currentLogId;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    let nextDailyAttempts = 1;
+    let nextEditDays = 1;
+
+    if (targetId) {
+      if (lastEditDate === today) {
+        nextDailyAttempts = dailyAttempts + 1;
+        nextEditDays = editDays;
+      } else {
+        nextDailyAttempts = 1;
+        nextEditDays = editDays + 1;
+      }
+    }
+
+    if (nextDailyAttempts > 3) {
+      alert('오늘 수정 기회(3회)를 모두 사용했습니다. 내일 다시 도전해주세요!');
       return;
     }
     
@@ -207,38 +236,82 @@ const WriteLog: React.FC = () => {
 
       if (!aiResult.success) {
         setIsSubmitting(false);
-        alert('AI 피드백 오류: ' + aiResponse);
+        alert('선생님 조언 오류: ' + aiResponse);
         return;
       }
+
+      // 점수 추출 및 클린 텍스트 생성
+      const match = aiResponse.match(/\[SCORE:\s*(\d+)\]/);
+      const score = match ? parseInt(match[1], 10) : 0;
+      const cleanAiResponse = aiResponse.replace(/\[SCORE:\s*\d+\]/g, '').trim();
 
       // 4. DB 저장
       let insertedData;
       
-      if (editId) {
-        // 기존 시도 횟수 가져오기 (만약 DB에 attempts가 없다면 기본 1)
-        const { data: existingLog } = await supabase.from('reading_logs').select('attempts').eq('id', editId).single();
+      if (targetId) {
+        // 기존 시도 횟수 및 초기 점수 가져오기
+        const { data: existingLog } = await supabase.from('reading_logs').select('attempts, initial_score').eq('id', targetId).single();
         const currentAttempts = existingLog?.attempts || 1;
+        const initialScore = existingLog?.initial_score || score;
+        const scoreImprovement = score - initialScore;
+        const editDuration = Math.floor((Date.now() - editStartTime) / 1000);
 
-        const { data, error } = await supabase.from('reading_logs').update({
+        const newHistoryItem = {
+          day: nextEditDays,
+          attempt: nextDailyAttempts,
+          edit_time: editDuration,
+          score: score,
+          timestamp: new Date().toISOString()
+        };
+        const updatedHistory = [...revisionHistory, newHistoryItem];
+
+        let updatePayload: any = {
           book_title: bookTitle,
           category: category,
           text_content: text,
           image_url: uploadedImageUrl,
-          ai_feedback: aiResponse,
-          attempts: currentAttempts + 1
-        }).eq('id', editId).select().single();
+          ai_feedback: cleanAiResponse,
+          attempts: currentAttempts + 1,
+          final_score: score,
+          score_improvement: scoreImprovement,
+          edit_count: currentAttempts,
+          
+          last_edit_date: today,
+          edit_days: nextEditDays,
+          daily_attempts: nextDailyAttempts,
+          revision_history: updatedHistory
+        };
+
+        const { data, error } = await supabase.from('reading_logs').update(updatePayload).eq('id', targetId).select().single();
         
         if (error) throw error;
         insertedData = data;
       } else {
+        const newHistoryItem = {
+          day: 1,
+          attempt: 1,
+          edit_time: 0,
+          score: score,
+          timestamp: new Date().toISOString()
+        };
+
         const { data, error } = await supabase.from('reading_logs').insert({
           user_id: user.id,
           book_title: bookTitle,
           category: category,
           text_content: text,
           image_url: uploadedImageUrl,
-          ai_feedback: aiResponse,
-          attempts: 1
+          ai_feedback: cleanAiResponse,
+          attempts: 1,
+          initial_score: score,
+          final_score: score,
+          score_improvement: 0,
+          edit_count: 0,
+          
+          last_edit_date: today,
+          edit_days: 1,
+          daily_attempts: 1,
+          revision_history: [newHistoryItem]
         }).select().single();
         
         if (error) throw error;
@@ -273,12 +346,17 @@ const WriteLog: React.FC = () => {
       }
       
       setCurrentLogId(insertedData.id);
-      
-      const cleanAiResponse = aiResponse.replace(/\[SCORE:\s*\d+\]/g, '').trim();
+      setAttempts(insertedData.attempts);
+      setEditDays(insertedData.edit_days);
+      setDailyAttempts(insertedData.daily_attempts);
+      setLastEditDate(insertedData.last_edit_date);
+      setRevisionHistory(insertedData.revision_history);
+      setEditStartTime(Date.now()); // 다음 수정을 위한 타이머 리셋
+      setIsEditModalOpen(false); // 혹시 모달에서 호출되었다면 닫기
 
       const resultMessage = earnedPoint 
         ? "\n\n🎉 통과! 1 포인트를 얻었습니다!" 
-        : `\n\n⚠️ 아쉽게도 통과 기준에 미치지 못했어요. (남은 기회: ${3 - (insertedData.attempts || 1)}번)\n대시보드에서 '다시 도전하기'를 눌러 수정해보세요!`;
+        : `\n\n⚠️ 아쉽게도 통과 기준에 미치지 못했어요. (오늘 남은 기회: ${3 - insertedData.daily_attempts}번)\n대시보드에서 '다시 도전하기'를 눌러 수정해보세요!`;
       
       setFeedback(cleanAiResponse + "\n" + resultMessage);
     } catch (error: any) {
@@ -289,26 +367,7 @@ const WriteLog: React.FC = () => {
     }
   };
 
-  // 피드백 수정 후 DB 업데이트
-  const handleUpdateLog = async () => {
-    if (!currentLogId || !text) return;
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('reading_logs')
-        .update({ text_content: text })
-        .eq('id', currentLogId);
 
-      if (error) throw error;
-      alert('성공적으로 수정되었습니다!');
-      setIsEditModalOpen(false);
-    } catch (error: any) {
-      alert('수정 중 오류가 발생했습니다: ' + error.message);
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // TTS 더미 핸들러
   const handleSpeakFeedback = () => {
@@ -421,7 +480,7 @@ const WriteLog: React.FC = () => {
             
             {imageType === 'handwriting' && (
               <p className="text-sm text-green-600 mb-3 bg-green-50 p-2 rounded-lg inline-block">
-                💡 손글씨를 사진으로 찍어 올리면, 제출할 때 AI 선생님이 글자로 읽어서 피드백을 해줄 거예요!
+                💡 손글씨를 사진으로 찍어 올리면, 제출할 때 나무요정 선생님이 글자로 읽어서 조언을 해줄 거예요!
               </p>
             )}
 
@@ -459,7 +518,7 @@ const WriteLog: React.FC = () => {
           </div>
         )}
 
-        {/* AI 피드백 모달/영역 */}
+        {/* 선생님 조언 모달/영역 */}
         {feedback && (
           <div className="mt-6 bg-gradient-to-r from-green-100 to-blue-100 rounded-3xl p-6 shadow-sm border border-green-200 animate-fade-in-up">
             <div className="flex justify-between items-start mb-4">
@@ -469,7 +528,7 @@ const WriteLog: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800">나무요정 선생님</h3>
-                  <p className="text-xs text-gray-500">AI 피드백 도착!</p>
+                  <p className="text-xs text-gray-500">선생님의 조언 도착!</p>
                 </div>
               </div>
               
@@ -527,11 +586,11 @@ const WriteLog: React.FC = () => {
                   취소
                 </button>
                 <button 
-                  onClick={handleUpdateLog}
+                  onClick={handleSubmit}
                   disabled={isSubmitting}
                   className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl shadow-md transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? '수정 중...' : '최종 저장'}
+                  {isSubmitting ? '수정 중...' : '최종 제출'}
                 </button>
               </div>
             </div>
