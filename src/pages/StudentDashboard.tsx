@@ -149,18 +149,28 @@ const StudentDashboard: React.FC = () => {
 
     const newPoints = userStats.points - 1;
 
+    const { data, error } = await supabase.from('users').update({ 
+      plant_growth: 1,
+      points: newPoints
+    }).eq('id', targetUserId).select();
+
+    if (error) {
+      alert(`DB 업데이트 오류 발생: ${error.message} (권한이 없거나 네트워크 오류입니다.)`);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      alert("⚠️ 데이터베이스에 적용되지 않았습니다! (Supabase RLS UPDATE 정책이 설정되어 있는지 확인해주세요.)");
+      return;
+    }
+
     setUserStats(prev => ({ 
       ...prev, 
       points: newPoints, 
       plant_growth: 1
     }));
 
-    await supabase.from('users').update({ 
-      plant_growth: 1,
-      points: newPoints
-    }).eq('id', targetUserId);
-    
-    alert("씨앗을 성공적으로 구매했습니다! 숲으로 가서 땅에 씨앗을 심어보세요.");
+    alert('씨앗을 구매했습니다! 숲으로 가서 심어주세요.');
   };
 
   const handleBuyItem = async (itemType: 'water' | 'sun' | 'wind') => {

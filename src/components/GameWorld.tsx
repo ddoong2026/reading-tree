@@ -197,11 +197,18 @@ const GameWorld: React.FC = () => {
     e.stopPropagation();
     if (!plantPreviewPos || !profile?.id) return;
     
-    await supabase.from('users').update({
+    const { data, error } = await supabase.from('users').update({
       plant_position_x: plantPreviewPos.x,
       plant_position_z: plantPreviewPos.z,
       class_id: classId || null
-    }).eq('id', profile.id);
+    }).eq('id', profile.id).select();
+
+    if (error || !data || data.length === 0) {
+      alert("⚠️ 씨앗 심기에 실패했습니다! (DB 권한 부족: Supabase UPDATE 정책을 확인하세요)");
+      setIsPlantingMode(false);
+      setPlantPreviewPos(null);
+      return;
+    }
     
     setIsPlantingMode(false);
     setPlantPreviewPos(null);
