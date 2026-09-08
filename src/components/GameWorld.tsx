@@ -87,6 +87,8 @@ const GameWorld: React.FC = () => {
   const [selectedStudentLogs, setSelectedStudentLogs] = useState<any[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
 
+  const [myInventory, setMyInventory] = useState({ water: 0, sun: 0, wind: 0 });
+
   React.useEffect(() => {
     if (!selectedStudentId) {
       setSelectedStudentLogs([]);
@@ -104,7 +106,7 @@ const GameWorld: React.FC = () => {
   React.useEffect(() => {
     const fetchPlants = async () => {
       // 1. Fetch all users
-      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z');
+      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind');
       if (classId) {
         userQuery = userQuery.eq('class_id', classId);
       }
@@ -113,6 +115,11 @@ const GameWorld: React.FC = () => {
       const { data: logsData } = await supabase.from('reading_logs').select('user_id, category');
       
       if (usersData && logsData) {
+        const me = usersData.find(u => u.id === profile?.id);
+        if (me) {
+          setMyInventory({ water: me.item_water || 0, sun: me.item_sun || 0, wind: me.item_wind || 0 });
+        }
+
         // filter out users without logs or growth
         const activeUsers = usersData.filter(user => 
           (user.plant_growth && user.plant_growth > 0) || 
@@ -147,7 +154,7 @@ const GameWorld: React.FC = () => {
       }
     };
     fetchPlants();
-  }, [classId]);
+  }, [classId, profile?.id]);
 
   // 바닥(땅) 클릭 핸들러
   const handleGroundClick = (event: ThreeEvent<PointerEvent>) => {
@@ -355,9 +362,37 @@ const GameWorld: React.FC = () => {
             ❌ 씨앗 심기 취소
           </button>
         )}
+
+        {/* 내 인벤토리 표시 */}
+        <div className="flex flex-col gap-2 bg-white/90 backdrop-blur-sm p-4 rounded-2xl shadow-lg border-2 border-green-200 mt-2 w-fit">
+          <h3 className="text-sm font-bold text-green-800">내 인벤토리</h3>
+          <div className="flex gap-4">
+            <div className="flex items-center gap-1 font-bold text-blue-600">
+              <img src="/water.png" alt="물" className="w-6 h-6 object-contain drop-shadow-sm" /> 
+              <span>x {myInventory.water}</span>
+            </div>
+            <div className="flex items-center gap-1 font-bold text-red-600">
+              <img src="/sun.png" alt="햇빛" className="w-6 h-6 object-contain drop-shadow-sm" /> 
+              <span>x {myInventory.sun}</span>
+            </div>
+            <div className="flex items-center gap-1 font-bold text-teal-600">
+              <img src="/wind.png" alt="바람" className="w-6 h-6 object-contain drop-shadow-sm" /> 
+              <span>x {myInventory.wind}</span>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-500 font-medium leading-tight">아이템 사용은 '내 대시보드'에서 할 수 있습니다.</p>
+        </div>
       </div>
 
       <div className="absolute top-6 right-6 z-10 flex gap-4">
+        {profile?.role === 'teacher' && (
+          <Link 
+            to="/student" 
+            className="px-6 py-2 bg-green-500 text-white font-bold rounded-full shadow-md hover:bg-green-600 transition-all flex items-center gap-2"
+          >
+            🌱 내 상점 가기
+          </Link>
+        )}
         <Link 
           to={dashboardPath} 
           className="px-6 py-2 bg-blue-500 text-white font-bold rounded-full shadow-md hover:bg-blue-600 transition-all"
