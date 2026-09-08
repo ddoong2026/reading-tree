@@ -79,7 +79,6 @@ const GameWorld: React.FC = () => {
   const [isPlantingMode, setIsPlantingMode] = useState(false);
   const [plantPreviewPos, setPlantPreviewPos] = useState<THREE.Vector3 | null>(null);
   const [plantPreviewValid, setPlantPreviewValid] = useState(false);
-  const [hasSeed, setHasSeed] = useState(false);
 
   // 식물 상호작용 상태
   const [hoveredPlantId, setHoveredPlantId] = useState<string | null>(null);
@@ -87,7 +86,7 @@ const GameWorld: React.FC = () => {
   const [selectedStudentLogs, setSelectedStudentLogs] = useState<any[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
 
-  const [myInventory, setMyInventory] = useState({ water: 0, sun: 0, wind: 0 });
+  const [myInventory, setMyInventory] = useState<{ water: number; sun: number; wind: number; plantGrowth: number; plantPosX: number | null }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null });
 
   React.useEffect(() => {
     if (!selectedStudentId) {
