@@ -88,6 +88,43 @@ const GameWorld: React.FC = () => {
 
   const [myInventory, setMyInventory] = useState<{ water: number; sun: number; wind: number; plantGrowth: number; plantPosX: number | null }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null });
 
+  const handleUseItemInWorld = async (itemType: 'water' | 'sun' | 'wind') => {
+    if (!profile) return;
+    if (myInventory.plantGrowth === 0 || myInventory.plantPosX == null) {
+      alert("씨앗을 먼저 심어주세요!");
+      return;
+    }
+    const currentCount = myInventory[itemType];
+    if (currentCount <= 0) {
+      alert("아이템이 부족합니다! 내 상점에서 먼저 구매해주세요.");
+      return;
+    }
+
+    const column = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
+    const newGrowth = myInventory.plantGrowth + 1;
+    const newCount = currentCount - 1;
+
+    // 낙관적 업데이트
+    setMyInventory(prev => ({
+      ...prev,
+      [itemType]: newCount,
+      plantGrowth: newGrowth
+    }));
+
+    setStudentsPlants(prev => prev.map(p => 
+      p.id === profile.id ? { ...p, growth: newGrowth } : p
+    ));
+
+    const { error } = await supabase.from('users').update({
+      [column]: newCount,
+      plant_growth: newGrowth
+    }).eq('id', profile.id);
+
+    if (error) {
+      alert("아이템 사용 중 오류가 발생했습니다: " + error.message);
+    }
+  };
+
   React.useEffect(() => {
     if (!selectedStudentId) {
       setSelectedStudentLogs([]);
@@ -391,25 +428,34 @@ const GameWorld: React.FC = () => {
         {/* 내 인벤토리 표시 */}
         <div className="flex flex-col gap-2 bg-white/90 backdrop-blur-sm p-4 rounded-2xl shadow-lg border-2 border-green-200 mt-2 w-fit">
           <h3 className="text-sm font-bold text-green-800">내 인벤토리</h3>
-          <div className="flex gap-4">
-            <div className="flex items-center gap-1 font-bold text-amber-600">
+          <div className="flex gap-2">
+            <div className="flex items-center gap-1 font-bold text-amber-600 bg-white/50 px-2 py-1 rounded-lg">
               <img src="/seed.png" alt="씨앗" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span className="text-xs">{actualHasSeed ? '1개 (미심음)' : (myInventory.plantGrowth > 0 ? '이미 심음' : '0개')}</span>
             </div>
-            <div className="flex items-center gap-1 font-bold text-blue-600">
+            <button 
+              onClick={() => handleUseItemInWorld('water')}
+              className="flex items-center gap-1 font-bold text-blue-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-blue-100"
+            >
               <img src="/water.png" alt="물" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span>x {myInventory.water}</span>
-            </div>
-            <div className="flex items-center gap-1 font-bold text-red-600">
+            </button>
+            <button 
+              onClick={() => handleUseItemInWorld('sun')}
+              className="flex items-center gap-1 font-bold text-red-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-red-100"
+            >
               <img src="/sun.png" alt="햇빛" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span>x {myInventory.sun}</span>
-            </div>
-            <div className="flex items-center gap-1 font-bold text-teal-600">
+            </button>
+            <button 
+              onClick={() => handleUseItemInWorld('wind')}
+              className="flex items-center gap-1 font-bold text-teal-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-teal-100"
+            >
               <img src="/wind.png" alt="바람" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span>x {myInventory.wind}</span>
-            </div>
+            </button>
           </div>
-          <p className="text-[10px] text-gray-500 font-medium leading-tight">아이템 사용은 '내 대시보드'에서 할 수 있습니다.</p>
+          <p className="text-[10px] text-green-700 font-bold leading-tight mt-1">아이템을 클릭하여 내 식물을 바로 키울 수 있어요!</p>
         </div>
       </div>
 
