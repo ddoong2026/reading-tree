@@ -152,6 +152,15 @@ const GameWorld: React.FC = () => {
       if (profile?.id) {
         const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind').eq('id', profile.id).single();
         if (meData) {
+          // meData를 가져오자마자 무조건 내 인벤토리를 업데이트!
+          setMyInventory({ 
+            water: meData.item_water || 0, 
+            sun: meData.item_sun || 0, 
+            wind: meData.item_wind || 0,
+            plantGrowth: meData.plant_growth || 0,
+            plantPosX: meData.plant_position_x
+          });
+
           if (!usersData) usersData = [];
           const existingIndex = usersData.findIndex(u => u.id === meData.id);
           if (existingIndex !== -1) {
@@ -166,17 +175,6 @@ const GameWorld: React.FC = () => {
       const { data: logsData } = await supabase.from('reading_logs').select('user_id, category');
       
       if (usersData) {
-        const me = usersData.find(u => u.id === profile?.id);
-        if (me) {
-          setMyInventory({ 
-            water: me.item_water || 0, 
-            sun: me.item_sun || 0, 
-            wind: me.item_wind || 0,
-            plantGrowth: me.plant_growth || 0,
-            plantPosX: me.plant_position_x
-          });
-        }
-
         const validLogs = logsData || [];
 
         // filter out users without logs or growth
