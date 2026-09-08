@@ -177,10 +177,10 @@ const WriteLog: React.FC = () => {
       
       // 5. 포인트 지급 조건 확인 (70점 이상)
       const match = aiResponse.match(/\[SCORE:\s*(\d+)\]/);
-      const score = match ? parseInt(match[1], 10) : 100;
+      const score = match ? parseInt(match[1], 10) : 0;
       let earnedPoint = false;
 
-      if (score >= 70) {
+      if (aiResult.success && score >= 70) {
         try {
           const { data: userData } = await supabase.from('users').select('points').eq('id', user.id).single();
           const currentPoints = userData?.points || 0;

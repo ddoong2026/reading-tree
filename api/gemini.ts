@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action, textContent, hasImage, base64Image, mimeType } = req.body;
     
     const genAI = new GoogleGenerativeAI(API_KEY);
-    const fallbackModels = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-pro"];
+    const fallbackModels = ["gemini-3.6-flash"];
 
     if (action === 'generateFeedback') {
       const defaultPrompt = `

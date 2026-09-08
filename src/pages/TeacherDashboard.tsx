@@ -401,6 +401,9 @@ const TeacherDashboard: React.FC = () => {
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-purple-900">선생님/관리자 대시보드</h1>
         <div className="flex gap-4 items-center">
+          <Link to="/student" className="px-4 py-2 bg-green-100 text-green-700 font-bold rounded-lg shadow-sm hover:bg-green-200 transition-colors text-sm">
+            🌱 내 식물/상점 보기
+          </Link>
           <button 
             onClick={checkApiModels}
             className="px-4 py-2 bg-yellow-100 text-yellow-700 font-bold rounded-lg shadow-sm hover:bg-yellow-200 transition-colors text-sm"
