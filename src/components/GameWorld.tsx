@@ -483,8 +483,13 @@ const GameWorld: React.FC = () => {
           >
             ← 숲(월드맵)으로
           </Link>
-          <div className="px-6 py-2 bg-green-600 text-white font-black rounded-full shadow-lg border-2 border-green-400 text-lg">
-            {formatClassId(classId)}의 독서 나무
+          <div className="flex flex-col gap-1">
+            <div className="px-6 py-2 bg-green-600 text-white font-black rounded-full shadow-lg border-2 border-green-400 text-lg">
+              {formatClassId(classId)}의 독서 나무 (Lv.{treeLevel})
+            </div>
+            <div className="px-4 py-1 bg-white/90 text-green-800 font-bold rounded-full shadow border border-green-200 text-sm text-center">
+              EXP: {treeExp} / {treeNextExp}
+            </div>
           </div>
         </div>
         
