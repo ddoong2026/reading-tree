@@ -47,6 +47,9 @@ const StudentDashboard: React.FC = () => {
   const [rouletteResult, setRouletteResult] = useState<any | null>(null);
   const [showQuestComplete, setShowQuestComplete] = useState(false);
 
+  // 교사 테스트용 포인트
+  const [testPoints, setTestPoints] = useState(0);
+
   const isTeacherView = !!studentId && profile?.role === 'teacher';
   const targetUserId = isTeacherView ? studentId : user?.id;
 
@@ -79,9 +82,10 @@ const StudentDashboard: React.FC = () => {
         // 동적 포인트 계산: 획득한 포인트(독서록 수) - 사용한 포인트(보유 아이템 수 + 성장 수치(사용된 아이템+씨앗))
         const earned = fetchedLogs.length;
         const spent = (d.item_water || 0) + (d.item_sun || 0) + (d.item_wind || 0) + (d.plant_growth || 0);
-        const actualPoints = Math.max(0, earned - spent);
+        const actualPoints = Math.max(0, earned - spent) + testPoints;
 
-        setUserStats({
+        setUserStats(prev => ({
+          ...prev,
           points: actualPoints,
           item_water: d.item_water || 0,
           item_sun: d.item_sun || 0,
@@ -91,7 +95,7 @@ const StudentDashboard: React.FC = () => {
         });
 
         // DB에 포인트가 실제와 다르면 동기화 (선택적)
-        if (d.points !== actualPoints && !isTeacherView) {
+        if (d.points !== actualPoints && !isTeacherView && testPoints === 0) {
           await supabase.from('users').update({ points: actualPoints }).eq('id', targetUserId);
         }
       }
@@ -99,7 +103,7 @@ const StudentDashboard: React.FC = () => {
     };
 
     loadData();
-  }, [targetUserId, isTeacherView]);
+  }, [targetUserId, isTeacherView, testPoints]);
 
   const handleDelete = async (id: string, title: string) => {
     if (!window.confirm(`'${title}' 독서록을 정말 삭제하시겠습니까?`)) return;
@@ -470,8 +474,18 @@ const StudentDashboard: React.FC = () => {
               <h2 className="text-lg font-bold text-amber-900 flex items-center gap-2">
                 <ShoppingBag size={20} /> 새싹 상점
               </h2>
-              <div className="bg-white px-3 py-1 rounded-full font-bold text-amber-600 shadow-sm border border-amber-200">
-                💰 {userStats.points} P
+              <div className="flex gap-2">
+                {profile?.role === 'teacher' && (
+                  <button 
+                    onClick={() => setTestPoints(prev => prev + 10)}
+                    className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1 rounded-full font-bold text-xs shadow-sm border border-purple-200 transition-colors"
+                  >
+                    + 테스트 10P
+                  </button>
+                )}
+                <div className="bg-white px-3 py-1 rounded-full font-bold text-amber-600 shadow-sm border border-amber-200">
+                  💰 {userStats.points} P
+                </div>
               </div>
             </div>
             <p className="text-sm text-amber-700 mb-4 font-medium">독서록을 쓰고 모은 포인트로 식물을 키울 아이템을 사보세요! (각 1P)</p>
@@ -482,8 +496,8 @@ const StudentDashboard: React.FC = () => {
                 disabled={isTeacherView || userStats.plant_growth > 0}
                 className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth > 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-amber-50 border-amber-200'}`}
               >
-                <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-1 text-xl">
-                  🌰
+                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center mb-1 p-1">
+                  <img src="/seed.png" alt="씨앗" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-xs font-bold text-gray-700">씨앗 사기</span>
               </button>
@@ -492,8 +506,8 @@ const StudentDashboard: React.FC = () => {
                 disabled={isTeacherView || userStats.plant_growth === 0}
                 className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth === 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-blue-50 border-blue-100'}`}
               >
-                <div className="w-10 h-10 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center mb-1">
-                  <Droplets size={20} />
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mb-1 p-1.5">
+                  <img src="/water.png" alt="물" className="w-full h-full object-contain drop-shadow-sm" />
                 </div>
                 <span className="text-xs font-bold text-gray-700">물 주기</span>
               </button>
@@ -502,8 +516,8 @@ const StudentDashboard: React.FC = () => {
                 disabled={isTeacherView || userStats.plant_growth === 0}
                 className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth === 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-red-50 border-red-100'}`}
               >
-                <div className="w-10 h-10 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-1">
-                  <Sun size={20} />
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mb-1 p-1">
+                  <img src="/sun.png" alt="햇빛" className="w-full h-full object-contain drop-shadow-sm" />
                 </div>
                 <span className="text-xs font-bold text-gray-700">햇빛 쬐기</span>
               </button>
@@ -512,8 +526,8 @@ const StudentDashboard: React.FC = () => {
                 disabled={isTeacherView || userStats.plant_growth === 0}
                 className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth === 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-teal-50 border-teal-100'}`}
               >
-                <div className="w-10 h-10 bg-teal-100 text-teal-500 rounded-full flex items-center justify-center mb-1">
-                  <Wind size={20} />
+                <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center mb-1 p-1">
+                  <img src="/wind.png" alt="바람" className="w-full h-full object-contain drop-shadow-sm" />
                 </div>
                 <span className="text-xs font-bold text-gray-700">바람 쐬기</span>
               </button>
@@ -526,27 +540,27 @@ const StudentDashboard: React.FC = () => {
             
             <div className="w-full flex justify-between text-sm font-bold text-gray-500 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('water')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <Droplets size={18} className="text-blue-500" />
+                <button onClick={() => handleUseItem('water')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 p-1 ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <img src="/water.png" alt="물" className="w-full h-full object-contain" />
                 </button>
                 <span>x {userStats.item_water}</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('sun')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <Sun size={18} className="text-red-500" />
+                <button onClick={() => handleUseItem('sun')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform flex items-center justify-center w-8 h-8 rounded-full bg-red-100 p-1 ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <img src="/sun.png" alt="햇빛" className="w-full h-full object-contain" />
                 </button>
                 <span>x {userStats.item_sun}</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('wind')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <Wind size={18} className="text-teal-500" />
+                <button onClick={() => handleUseItem('wind')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform flex items-center justify-center w-8 h-8 rounded-full bg-teal-100 p-1 ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <img src="/wind.png" alt="바람" className="w-full h-full object-contain" />
                 </button>
                 <span>x {userStats.item_wind}</span>
               </div>
             </div>
 
-            <div className="w-32 h-32 bg-green-50 rounded-full border-4 border-green-200 flex items-center justify-center text-5xl mb-4 shadow-inner relative overflow-hidden">
-              {isFlower ? '🌻' : userStats.plant_growth >= 10 ? '🌿' : userStats.plant_growth >= 5 ? '🌱' : userStats.plant_growth >= 1 ? '🌰' : '❓'}
+            <div className="w-32 h-32 bg-green-50 rounded-full border-4 border-green-200 flex items-center justify-center text-5xl mb-4 shadow-inner relative overflow-hidden p-2">
+              {isFlower ? '🌻' : userStats.plant_growth >= 10 ? '🌿' : userStats.plant_growth >= 5 ? '🌱' : userStats.plant_growth >= 1 ? <img src="/seed.png" alt="씨앗" className="w-16 h-16 object-contain" /> : '❓'}
             </div>
             
             <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
