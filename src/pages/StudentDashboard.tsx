@@ -47,9 +47,6 @@ const StudentDashboard: React.FC = () => {
   const [rouletteResult, setRouletteResult] = useState<any | null>(null);
   const [showQuestComplete, setShowQuestComplete] = useState(false);
 
-  // 교사 테스트용 포인트
-  const [testPoints, setTestPoints] = useState(0);
-
   const isTeacherView = !!studentId && profile?.role === 'teacher';
   const targetUserId = isTeacherView ? studentId : user?.id;
 
@@ -79,31 +76,21 @@ const StudentDashboard: React.FC = () => {
         const d = statsResponse.data;
         if (isTeacherView) setStudentName(d.name || '');
         
-        // 동적 포인트 계산: 획득한 포인트(독서록 수) - 사용한 포인트(보유 아이템 수 + 성장 수치(사용된 아이템+씨앗))
-        const earned = fetchedLogs.length;
-        const spent = (d.item_water || 0) + (d.item_sun || 0) + (d.item_wind || 0) + (d.plant_growth || 0);
-        const actualPoints = Math.max(0, earned - spent) + testPoints;
-
         setUserStats(prev => ({
           ...prev,
-          points: actualPoints,
+          points: d.points || 0,
           item_water: d.item_water || 0,
           item_sun: d.item_sun || 0,
           item_wind: d.item_wind || 0,
           plant_growth: d.plant_growth || 0,
           class_id: d.class_id || null
         }));
-
-        // DB에 포인트가 실제와 다르면 동기화 (선택적)
-        if (d.points !== actualPoints && !isTeacherView && testPoints === 0) {
-          await supabase.from('users').update({ points: actualPoints }).eq('id', targetUserId);
-        }
       }
       setLoading(false);
     };
 
     loadData();
-  }, [targetUserId, isTeacherView, testPoints]);
+  }, [targetUserId, isTeacherView]);
 
   const handleDelete = async (id: string, title: string) => {
     if (!window.confirm(`'${title}' 독서록을 정말 삭제하시겠습니까?`)) return;
@@ -160,16 +147,17 @@ const StudentDashboard: React.FC = () => {
     
     if (!window.confirm("1 포인트를 사용하여 식물 씨앗을 구매하시겠습니까?")) return;
 
-    const newStats = { 
-      ...userStats, 
-      points: userStats.points - 1, 
-      plant_growth: 1
-    };
+    const newPoints = userStats.points - 1;
 
-    setUserStats(newStats);
+    setUserStats(prev => ({ 
+      ...prev, 
+      points: newPoints, 
+      plant_growth: 1
+    }));
 
     await supabase.from('users').update({ 
-      plant_growth: 1
+      plant_growth: 1,
+      points: newPoints
     }).eq('id', targetUserId);
     
     alert("씨앗을 성공적으로 구매했습니다! 숲으로 가서 땅에 씨앗을 심어보세요.");
@@ -183,17 +171,18 @@ const StudentDashboard: React.FC = () => {
     
     if (!window.confirm("1 포인트를 사용하여 이 아이템을 구매하시겠습니까?")) return;
 
-    const column = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
-    const newStats = { 
-      ...userStats, 
-      points: userStats.points - 1, 
-      [column]: userStats[column] + 1 
-    };
+    const dbColumn = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
+    const newPoints = userStats.points - 1;
 
-    setUserStats(newStats);
+    setUserStats(prev => ({ 
+      ...prev, 
+      points: newPoints, 
+      [dbColumn]: prev[dbColumn] + 1 
+    }));
 
     await supabase.from('users').update({ 
-      [column]: newStats[column]
+      [dbColumn]: userStats[dbColumn] + 1,
+      points: newPoints
     }).eq('id', targetUserId);
   };
 
@@ -244,17 +233,22 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
-  // KDC 읽은 카테고리 집합
-  const readCategories = React.useMemo(() => new Set(logs.map(log => log.category || '000')), [logs]);
+  const passedLogs = React.useMemo(() => {
+    return logs.filter(log => {
+      const match = log.ai_feedback?.match(/\[SCORE:\s*(\d+)\]/);
+      const score = match ? parseInt(match[1]) : 100;
+      return score >= 70;
+    });
+  }, [logs]);
+
+  const readCategories = React.useMemo(() => new Set(passedLogs.map(log => log.category || '000')), [passedLogs]);
   const isFlower = readCategories.size >= 10;
 
-  // 퀘스트 상태 동기화 (로컬 스토리지)
   useEffect(() => {
     if (!targetUserId || loading) return;
     const savedQuest = localStorage.getItem(`quest_${targetUserId}`);
     if (savedQuest) {
       if (readCategories.has(savedQuest)) {
-        // 퀘스트 완료 처리
         localStorage.removeItem(`quest_${targetUserId}`);
         setQuestCategoryId(null);
         setShowQuestComplete(true);
@@ -275,7 +269,7 @@ const StudentDashboard: React.FC = () => {
     setIsSpinning(true);
     
     let spinCount = 0;
-    const maxSpins = 20; // 약 2초
+    const maxSpins = 20;
     const interval = setInterval(() => {
       const randomCat = unreadCategories[Math.floor(Math.random() * unreadCategories.length)];
       setRouletteResult(randomCat);
@@ -325,7 +319,6 @@ const StudentDashboard: React.FC = () => {
         )}
       </header>
 
-      {/* 퀘스트 배너 */}
       {questCategoryId && !isTeacherView && (
         <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-4 rounded-2xl shadow-md mb-6 flex justify-between items-center text-white">
           <div className="flex items-center gap-3">
@@ -394,60 +387,6 @@ const StudentDashboard: React.FC = () => {
             </div>
           ) : (
             <ul className="space-y-3">
-              {logs.map(log => (
-                <li key={log.id} className={`p-4 bg-blue-50/50 border ${selectedLogIds.includes(log.id) ? 'border-blue-400 bg-blue-100/50' : 'border-blue-100'} rounded-xl flex flex-col group cursor-pointer`} onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}>
-                  <div className="flex justify-between items-center w-full">
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-                        checked={selectedLogIds.includes(log.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedLogIds([...selectedLogIds, log.id]);
-                          } else {
-                            setSelectedLogIds(selectedLogIds.filter(id => id !== log.id));
-                          }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <div className="flex flex-col">
-                        <span className="font-bold text-gray-800">{log.book_title}</span>
-                        <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold text-white ${KDC_CATEGORIES.find(c => c.id === log.category)?.bgColor || 'bg-gray-400'}`}>
-                            {KDC_CATEGORIES.find(c => c.id === log.category)?.name || '분류 없음'}
-                          </span>
-                          <span>{new Date(log.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleDelete(log.id, log.book_title); }}
-                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      title="삭제하기"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                  {expandedLogId === log.id && (
-                    <div className="mt-4 p-4 bg-white rounded-lg border border-blue-100 cursor-default" onClick={(e) => e.stopPropagation()}>
-                      {log.image_url && (
-                        <div className="mb-4">
-                          <img src={log.image_url} alt="첨부 이미지" className="w-full max-w-md rounded-lg shadow-sm" />
-                        </div>
-                      )}
-                      {log.text_content && (
-                        <div className="mb-4">
-                          <h4 className="text-sm font-bold text-gray-700 mb-1">내용</h4>
-                          <p className="text-gray-700 whitespace-pre-wrap">{log.text_content}</p>
-                        </div>
-                      )}
-                      {log.ai_feedback && (
-                        <div className="bg-purple-50 p-4 rounded-lg mt-4 border border-purple-100">
-                          <h4 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h4>
-                          <p className="text-purple-700 text-sm whitespace-pre-wrap leading-relaxed">{log.ai_feedback}</p>
-                        </div>
-                      )}
                       {!log.text_content && !log.image_url && !log.ai_feedback && (
                         <div className="text-gray-400 text-sm italic">내용이 없습니다.</div>
                       )}
@@ -477,7 +416,12 @@ const StudentDashboard: React.FC = () => {
               <div className="flex gap-2">
                 {profile?.role === 'teacher' && (
                   <button 
-                    onClick={() => setTestPoints(prev => prev + 10)}
+                    onClick={async () => {
+                      const newPoints = userStats.points + 10;
+                      setUserStats(prev => ({ ...prev, points: newPoints }));
+                      if (targetUserId) await supabase.from('users').update({ points: newPoints }).eq('id', targetUserId);
+                      alert('DB에 직접 10포인트가 추가되었습니다.');
+                    }}
                     className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1 rounded-full font-bold text-xs shadow-sm border border-purple-200 transition-colors"
                   >
                     + 테스트 10P
