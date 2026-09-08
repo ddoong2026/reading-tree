@@ -12,7 +12,7 @@ export const ItemEffectModel: React.FC<ItemEffectModelProps> = ({ position, type
   const groupRef = useRef<THREE.Group>(null);
   const startY = position[1] + 1;
 
-  useFrame((state) => {
+  useFrame(() => {
     if (groupRef.current) {
       // Float upwards gently
       groupRef.current.position.y += 0.015;

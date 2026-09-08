@@ -87,7 +87,7 @@ const GameWorld: React.FC = () => {
   const [selectedStudentLogs, setSelectedStudentLogs] = useState<any[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
 
-  const [myInventory, setMyInventory] = useState<{ water: number; sun: number; wind: number; plantGrowth: number; plantPosX: number | null }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null });
+  const [myInventory, setMyInventory] = useState<{ water: number; sun: number; wind: number; plantGrowth: number; plantPosX: number | null, plantPosZ: number | null }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null, plantPosZ: null });
 
   // 애니메이션 이펙트 상태
   const [activeEffects, setActiveEffects] = useState<{ id: string, type: 'water' | 'sun' | 'wind', position: [number, number, number] }[]>([]);
@@ -133,9 +133,8 @@ const GameWorld: React.FC = () => {
     // RPC를 쓰거나 단일 쿼리로 처리하기 애매하므로 프론트에서 먼저 현재 used 값을 읽거나,
     // 가장 안전한 방법은 RLS 정책에 막히지 않도록 기존 데이터를 기반으로 +1 하여 보냅니다.
     // 기존 meData를 가져왔을 때 used 값을 어딘가에 저장해야 합니다.
-    // 가장 간단하게는 usersData에서 찾아서 씁니다.
     const { data: meData } = await supabase.from('users').select(usedColumn).eq('id', profile.id).single();
-    const currentUsed = meData ? meData[usedColumn] || 0 : 0;
+    const currentUsed = meData ? (meData as any)[usedColumn] || 0 : 0;
 
     const { error } = await supabase.from('users').update({
       [column]: newCount,
@@ -181,7 +180,8 @@ const GameWorld: React.FC = () => {
             sun: meData.item_sun || 0, 
             wind: meData.item_wind || 0,
             plantGrowth: meData.plant_growth || 0,
-            plantPosX: meData.plant_position_x
+            plantPosX: meData.plant_position_x,
+            plantPosZ: meData.plant_position_z
           });
 
           if (!usersData) usersData = [];
