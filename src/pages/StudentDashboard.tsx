@@ -567,6 +567,12 @@ const StudentDashboard: React.FC = () => {
             <p className="text-center text-xs text-gray-500 font-medium">
               {isFlower ? '꽃이 활짝 피었어요! 축하합니다!' : userStats.plant_growth === 0 ? '상점에서 씨앗을 먼저 구매해주세요!' : '아이템을 주어 식물을 키워보세요!'}
             </p>
+            <Link 
+              to="/map" 
+              className="mt-4 px-5 py-2 w-full text-center bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold rounded-xl shadow-sm border border-emerald-200 transition-colors"
+            >
+              🌲 숲으로 가서 내 식물 보기 (심기)
+            </Link>
           </div>
 
           {/* KDC 독서 스탬프 */}
