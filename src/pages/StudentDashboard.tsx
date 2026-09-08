@@ -13,6 +13,7 @@ interface ReadingLog {
   text_content: string | null;
   ai_feedback: string | null;
   image_url: string | null;
+  attempts?: number;
 }
 
 interface UserStats {
@@ -58,7 +59,7 @@ const StudentDashboard: React.FC = () => {
       const [logsResponse, statsResponse] = await Promise.all([
         supabase
           .from('reading_logs')
-          .select('id, book_title, category, created_at, text_content, ai_feedback, image_url')
+          .select('id, book_title, category, created_at, text_content, ai_feedback, image_url, attempts')
           .eq('user_id', targetUserId)
           .order('created_at', { ascending: false }),
         supabase
@@ -246,7 +247,7 @@ const StudentDashboard: React.FC = () => {
   const passedLogs = React.useMemo(() => {
     return logs.filter(log => {
       const match = log.ai_feedback?.match(/\[SCORE:\s*(\d+)\]/);
-      const score = match ? parseInt(match[1]) : 100;
+      const score = match ? parseInt(match[1]) : 0;
       return score >= 70;
     });
   }, [logs]);
@@ -445,12 +446,28 @@ const StudentDashboard: React.FC = () => {
                           <p className="text-gray-700 whitespace-pre-wrap">{log.text_content}</p>
                         </div>
                       )}
-                      {log.ai_feedback && (
-                        <div className="bg-purple-50 p-4 rounded-lg mt-4 border border-purple-100">
-                          <h4 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h4>
-                          <p className="text-purple-700 text-sm whitespace-pre-wrap leading-relaxed">{log.ai_feedback}</p>
-                        </div>
-                      )}
+                      {log.ai_feedback && (() => {
+                        const scoreMatch = log.ai_feedback.match(/\[SCORE:\s*(\d+)\]/);
+                        const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+                        const cleanFeedback = log.ai_feedback.replace(/\[SCORE:\s*\d+\]/g, '').trim();
+                        const attempts = log.attempts || 1;
+                        const canRetry = score < 70 && attempts < 3;
+                        return (
+                          <>
+                            <div className="bg-purple-50 p-4 rounded-lg mt-4 border border-purple-100">
+                              <h4 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h4>
+                              <p className="text-purple-700 text-sm whitespace-pre-wrap leading-relaxed">{cleanFeedback}</p>
+                            </div>
+                            {canRetry && !isTeacherView && (
+                              <div className="mt-4 flex justify-end">
+                                <Link to={`/write?edit_id=${log.id}`} className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-lg shadow-sm transition-colors text-sm">
+                                  ✏️ 수정하고 다시 도전하기 (남은 기회: {3 - attempts}번)
+                                </Link>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                       {!log.text_content && !log.image_url && !log.ai_feedback && (
                         <div className="text-gray-400 text-sm italic">내용이 없습니다.</div>
                       )}

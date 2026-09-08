@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Mic, Image as ImageIcon, Send, Volume2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
@@ -7,6 +7,9 @@ import { generateReadingFeedback, extractTextFromImage } from '../lib/geminiApi'
 import { KDC_CATEGORIES } from '../lib/kdc';
 
 const WriteLog: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit_id');
+
   const [text, setText] = useState('');
   const [bookTitle, setBookTitle] = useState('');
   const [category, setCategory] = useState('000');
@@ -24,6 +27,7 @@ const WriteLog: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOcrDone, setIsOcrDone] = useState(false);
   const [currentLogId, setCurrentLogId] = useState<string | null>(null);
+  const [attempts, setAttempts] = useState(1);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   const { user, profile } = useAuth();
@@ -75,6 +79,29 @@ const WriteLog: React.FC = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (editId && user) {
+      const fetchLog = async () => {
+        const { data } = await supabase
+          .from('reading_logs')
+          .select('book_title, category, text_content, image_url, ai_feedback, attempts')
+          .eq('id', editId)
+          .single();
+        if (data) {
+          setBookTitle(data.book_title);
+          setCategory(data.category);
+          setText(data.text_content || '');
+          if (data.attempts) setAttempts(data.attempts);
+          if (data.image_url) {
+            setImagePreview(data.image_url);
+            setBase64Image(data.image_url);
+          }
+        }
+      };
+      fetchLog();
+    }
+  }, [editId, user]);
+
   const handleToggleRecord = () => {
     if (!recognitionRef.current) {
       alert("이 브라우저에서는 음성 인식 기능을 지원하지 않습니다. 크롬(Chrome) Edge, Safari 등의 지원 브라우저를 이용해주세요.");
@@ -122,7 +149,22 @@ const WriteLog: React.FC = () => {
 
   // 제출 및 DB 연동
   const handleSubmit = async () => {
-    if (!bookTitle || (!text && !imageFile) || !user) return;
+    if (!text.trim()) {
+      alert('독서록 내용을 입력해주세요!');
+      return;
+    }
+    if (!bookTitle.trim()) {
+      alert('책 제목을 입력해주세요!');
+      return;
+    }
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    if (attempts >= 3) {
+      alert('더 이상 이 독서록을 수정할 수 없습니다 (최대 3회 기회 소진). 새로운 독서록을 작성해주세요!');
+      return;
+    }
     
     setIsSubmitting(true);
 
@@ -164,16 +206,38 @@ const WriteLog: React.FC = () => {
       const aiResponse = aiResult.feedbackText;
 
       // 4. DB 저장
-      const { data: insertedData, error } = await supabase.from('reading_logs').insert({
-        user_id: user.id,
-        book_title: bookTitle,
-        category: category,
-        text_content: text,
-        image_url: uploadedImageUrl,
-        ai_feedback: aiResponse
-      }).select().single();
+      let insertedData;
+      
+      if (editId) {
+        // 기존 시도 횟수 가져오기 (만약 DB에 attempts가 없다면 기본 1)
+        const { data: existingLog } = await supabase.from('reading_logs').select('attempts').eq('id', editId).single();
+        const currentAttempts = existingLog?.attempts || 1;
 
-      if (error) throw error;
+        const { data, error } = await supabase.from('reading_logs').update({
+          book_title: bookTitle,
+          category: category,
+          text_content: text,
+          image_url: uploadedImageUrl,
+          ai_feedback: aiResponse,
+          attempts: currentAttempts + 1
+        }).eq('id', editId).select().single();
+        
+        if (error) throw error;
+        insertedData = data;
+      } else {
+        const { data, error } = await supabase.from('reading_logs').insert({
+          user_id: user.id,
+          book_title: bookTitle,
+          category: category,
+          text_content: text,
+          image_url: uploadedImageUrl,
+          ai_feedback: aiResponse,
+          attempts: 1
+        }).select().single();
+        
+        if (error) throw error;
+        insertedData = data;
+      }
       
       // 5. 포인트 지급 조건 확인 (70점 이상)
       const match = aiResponse.match(/\[SCORE:\s*(\d+)\]/);
@@ -204,10 +268,13 @@ const WriteLog: React.FC = () => {
       
       setCurrentLogId(insertedData.id);
       
+      const cleanAiResponse = aiResponse.replace(/\[SCORE:\s*\d+\]/g, '').trim();
+
       const resultMessage = earnedPoint 
         ? "\n\n🎉 통과! 1 포인트를 얻었습니다!" 
-        : "\n\n⚠️ 아쉽게도 통과 기준(70점)에 미치지 못해 포인트를 받지 못했어요. 내용을 더 정성껏 써보세요!";
-      setFeedback(aiResponse + resultMessage);
+        : `\n\n⚠️ 아쉽게도 통과 기준에 미치지 못했어요. (남은 기회: ${3 - (insertedData.attempts || 1)}번)\n대시보드에서 '다시 도전하기'를 눌러 수정해보세요!`;
+      
+      setFeedback(cleanAiResponse + "\n" + resultMessage);
     } catch (error: any) {
       alert('오류가 발생했습니다: ' + error.message);
       console.error(error);
