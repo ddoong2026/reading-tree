@@ -105,12 +105,24 @@ const GameWorld: React.FC = () => {
 
   React.useEffect(() => {
     const fetchPlants = async () => {
-      // 1. Fetch all users
+      // 1. Fetch all users for the current class
       let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind');
       if (classId) {
         userQuery = userQuery.eq('class_id', classId);
       }
-      const { data: usersData } = await userQuery;
+      let { data: usersData } = await userQuery;
+
+      // 1-b. 항상 현재 로그인한 유저의 정보를 가져와서 병합 (교사나 반이 없는 유저가 숲에 왔을 때 인벤토리/심기 권한을 주기 위함)
+      if (profile?.id) {
+        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind').eq('id', profile.id).single();
+        if (meData) {
+          if (!usersData) usersData = [];
+          if (!usersData.some(u => u.id === meData.id)) {
+            usersData.push(meData);
+          }
+        }
+      }
+
       // 2. Fetch all reading logs
       const { data: logsData } = await supabase.from('reading_logs').select('user_id, category');
       
@@ -189,7 +201,8 @@ const GameWorld: React.FC = () => {
     
     await supabase.from('users').update({
       plant_position_x: plantPreviewPos.x,
-      plant_position_z: plantPreviewPos.z
+      plant_position_z: plantPreviewPos.z,
+      class_id: classId || null
     }).eq('id', profile.id);
     
     setIsPlantingMode(false);
