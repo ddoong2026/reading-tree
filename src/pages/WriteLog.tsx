@@ -184,10 +184,21 @@ const WriteLog: React.FC = () => {
         try {
           const { data: userData } = await supabase.from('users').select('points').eq('id', user.id).single();
           const currentPoints = userData?.points || 0;
-          await supabase.from('users').update({ points: currentPoints + 1 }).eq('id', user.id);
-          earnedPoint = true;
+          
+          const { data: updateData, error: updateError } = await supabase.from('users')
+            .update({ points: currentPoints + 1 })
+            .eq('id', user.id)
+            .select();
+
+          if (updateError || !updateData || updateData.length === 0) {
+            console.error("포인트 업데이트 DB 거부됨(RLS 정책 확인 필요):", updateError);
+            alert("⚠️ 포인트 지급 실패! 데이터베이스(Supabase) 보안 정책(RLS) 때문에 점수가 저장되지 않았습니다. 관리자에게 'users 테이블의 UPDATE 정책' 추가를 요청하세요.");
+            earnedPoint = false;
+          } else {
+            earnedPoint = true;
+          }
         } catch (e) {
-          console.error("포인트 업데이트 실패:", e);
+          console.error("포인트 업데이트 에러 발생:", e);
         }
       }
       
