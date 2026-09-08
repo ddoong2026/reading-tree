@@ -126,7 +126,7 @@ const GameWorld: React.FC = () => {
           const uniqueCategories = new Set(userLogs.map(log => log.category || '000'));
           const isFlower = uniqueCategories.size >= 10;
           
-          if (user.id === profile?.id && userLogs.length >= 1 && user.plant_position_x == null) {
+          if (user.id === profile?.id && user.plant_growth && user.plant_growth > 0 && user.plant_position_x == null) {
             needsToPlant = true;
           }
 

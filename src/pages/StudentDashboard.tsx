@@ -40,6 +40,13 @@ const StudentDashboard: React.FC = () => {
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
+  // 퀘스트 및 룰렛 관련 상태
+  const [questCategoryId, setQuestCategoryId] = useState<string | null>(null);
+  const [isRouletteOpen, setIsRouletteOpen] = useState(false);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [rouletteResult, setRouletteResult] = useState<any | null>(null);
+  const [showQuestComplete, setShowQuestComplete] = useState(false);
+
   const isTeacherView = !!studentId && profile?.role === 'teacher';
   const targetUserId = isTeacherView ? studentId : user?.id;
 
@@ -69,9 +76,9 @@ const StudentDashboard: React.FC = () => {
         const d = statsResponse.data;
         if (isTeacherView) setStudentName(d.name || '');
         
-        // 동적 포인트 계산: 획득한 포인트(독서록 수) - 사용한 포인트(아이템 수)
+        // 동적 포인트 계산: 획득한 포인트(독서록 수) - 사용한 포인트(보유 아이템 수 + 성장 수치(사용된 아이템+씨앗))
         const earned = fetchedLogs.length;
-        const spent = (d.item_water || 0) + (d.item_sun || 0) + (d.item_wind || 0);
+        const spent = (d.item_water || 0) + (d.item_sun || 0) + (d.item_wind || 0) + (d.plant_growth || 0);
         const actualPoints = Math.max(0, earned - spent);
 
         setUserStats({
@@ -134,6 +141,34 @@ const StudentDashboard: React.FC = () => {
       setSelectedLogIds([]);
       alert(`${data?.length || selectedLogIds.length}개의 독서록이 삭제되었습니다.`);
     }
+  };
+
+  const handleBuySeed = async () => {
+    if (userStats.points < 1) {
+      alert("포인트가 부족합니다! 독서록을 작성하여 포인트를 모아보세요.");
+      return;
+    }
+    
+    if (userStats.plant_growth > 0) {
+      alert("이미 씨앗을 구매하셨습니다.");
+      return;
+    }
+    
+    if (!window.confirm("1 포인트를 사용하여 식물 씨앗을 구매하시겠습니까?")) return;
+
+    const newStats = { 
+      ...userStats, 
+      points: userStats.points - 1, 
+      plant_growth: 1
+    };
+
+    setUserStats(newStats);
+
+    await supabase.from('users').update({ 
+      plant_growth: 1
+    }).eq('id', targetUserId);
+    
+    alert("씨앗을 성공적으로 구매했습니다! 숲으로 가서 땅에 씨앗을 심어보세요.");
   };
 
   const handleBuyItem = async (itemType: 'water' | 'sun' | 'wind') => {
@@ -205,11 +240,54 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
-
-
   // KDC 읽은 카테고리 집합
-  const readCategories = new Set(logs.map(log => log.category || '000'));
+  const readCategories = React.useMemo(() => new Set(logs.map(log => log.category || '000')), [logs]);
   const isFlower = readCategories.size >= 10;
+
+  // 퀘스트 상태 동기화 (로컬 스토리지)
+  useEffect(() => {
+    if (!targetUserId || loading) return;
+    const savedQuest = localStorage.getItem(`quest_${targetUserId}`);
+    if (savedQuest) {
+      if (readCategories.has(savedQuest)) {
+        // 퀘스트 완료 처리
+        localStorage.removeItem(`quest_${targetUserId}`);
+        setQuestCategoryId(null);
+        setShowQuestComplete(true);
+      } else {
+        setQuestCategoryId(savedQuest);
+      }
+    }
+  }, [targetUserId, readCategories, loading]);
+
+  const handleSpinRoulette = () => {
+    const unreadCategories = KDC_CATEGORIES.filter(c => !readCategories.has(c.id));
+    if (unreadCategories.length === 0) {
+      alert("이미 모든 분야의 책을 읽으셨습니다! 대단해요!");
+      return;
+    }
+    
+    setIsRouletteOpen(true);
+    setIsSpinning(true);
+    
+    let spinCount = 0;
+    const maxSpins = 20; // 약 2초
+    const interval = setInterval(() => {
+      const randomCat = unreadCategories[Math.floor(Math.random() * unreadCategories.length)];
+      setRouletteResult(randomCat);
+      spinCount++;
+      if (spinCount >= maxSpins) {
+        clearInterval(interval);
+        setIsSpinning(false);
+        const finalCategory = unreadCategories[Math.floor(Math.random() * unreadCategories.length)];
+        setRouletteResult(finalCategory);
+        setQuestCategoryId(finalCategory.id);
+        if (targetUserId) {
+          localStorage.setItem(`quest_${targetUserId}`, finalCategory.id);
+        }
+      }
+    }, 100);
+  };
 
   return (
     <div className="min-h-screen bg-blue-50 p-8">
@@ -242,6 +320,36 @@ const StudentDashboard: React.FC = () => {
           </div>
         )}
       </header>
+
+      {/* 퀘스트 배너 */}
+      {questCategoryId && !isTeacherView && (
+        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-4 rounded-2xl shadow-md mb-6 flex justify-between items-center text-white">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🎯</span>
+            <div>
+              <h2 className="text-lg font-bold">오늘의 독서 퀘스트</h2>
+              <p className="text-indigo-100 text-sm font-medium">
+                <strong className="text-yellow-300">[{KDC_CATEGORIES.find(c => c.id === questCategoryId)?.name}]</strong> 분야의 책을 찾아 읽고 독서록을 남겨주세요!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showQuestComplete && !isTeacherView && (
+        <div className="bg-gradient-to-r from-green-400 to-emerald-500 p-4 rounded-2xl shadow-md mb-6 flex justify-between items-center text-white animate-bounce">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🎉</span>
+            <div>
+              <h2 className="text-lg font-bold">퀘스트 완료!</h2>
+              <p className="text-green-50 text-sm font-medium">
+                멋져요! 퀘스트로 받은 분야의 책을 다 읽었습니다. 새로운 퀘스트를 뽑아볼까요?
+              </p>
+            </div>
+          </div>
+          <button onClick={() => setShowQuestComplete(false)} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-bold transition-colors">닫기</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm md:col-span-2">
@@ -368,11 +476,21 @@ const StudentDashboard: React.FC = () => {
             </div>
             <p className="text-sm text-amber-700 mb-4 font-medium">독서록을 쓰고 모은 포인트로 식물을 키울 아이템을 사보세요! (각 1P)</p>
             
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
+              <button 
+                onClick={() => handleBuySeed()}
+                disabled={isTeacherView || userStats.plant_growth > 0}
+                className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth > 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-amber-50 border-amber-200'}`}
+              >
+                <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-1 text-xl">
+                  🌰
+                </div>
+                <span className="text-xs font-bold text-gray-700">씨앗 사기</span>
+              </button>
               <button 
                 onClick={() => handleBuyItem('water')}
-                disabled={isTeacherView}
-                className="flex flex-col items-center p-2 bg-white rounded-xl shadow-sm hover:bg-blue-50 border border-blue-100 transition-colors"
+                disabled={isTeacherView || userStats.plant_growth === 0}
+                className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth === 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-blue-50 border-blue-100'}`}
               >
                 <div className="w-10 h-10 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center mb-1">
                   <Droplets size={20} />
@@ -381,8 +499,8 @@ const StudentDashboard: React.FC = () => {
               </button>
               <button 
                 onClick={() => handleBuyItem('sun')}
-                disabled={isTeacherView}
-                className="flex flex-col items-center p-2 bg-white rounded-xl shadow-sm hover:bg-red-50 border border-red-100 transition-colors"
+                disabled={isTeacherView || userStats.plant_growth === 0}
+                className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth === 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-red-50 border-red-100'}`}
               >
                 <div className="w-10 h-10 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-1">
                   <Sun size={20} />
@@ -391,8 +509,8 @@ const StudentDashboard: React.FC = () => {
               </button>
               <button 
                 onClick={() => handleBuyItem('wind')}
-                disabled={isTeacherView}
-                className="flex flex-col items-center p-2 bg-white rounded-xl shadow-sm hover:bg-teal-50 border border-teal-100 transition-colors"
+                disabled={isTeacherView || userStats.plant_growth === 0}
+                className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth === 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-teal-50 border-teal-100'}`}
               >
                 <div className="w-10 h-10 bg-teal-100 text-teal-500 rounded-full flex items-center justify-center mb-1">
                   <Wind size={20} />
@@ -408,19 +526,19 @@ const StudentDashboard: React.FC = () => {
             
             <div className="w-full flex justify-between text-sm font-bold text-gray-500 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('water')} disabled={isTeacherView} className="hover:scale-110 transition-transform">
+                <button onClick={() => handleUseItem('water')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <Droplets size={18} className="text-blue-500" />
                 </button>
                 <span>x {userStats.item_water}</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('sun')} disabled={isTeacherView} className="hover:scale-110 transition-transform">
+                <button onClick={() => handleUseItem('sun')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <Sun size={18} className="text-red-500" />
                 </button>
                 <span>x {userStats.item_sun}</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('wind')} disabled={isTeacherView} className="hover:scale-110 transition-transform">
+                <button onClick={() => handleUseItem('wind')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <Wind size={18} className="text-teal-500" />
                 </button>
                 <span>x {userStats.item_wind}</span>
@@ -428,14 +546,14 @@ const StudentDashboard: React.FC = () => {
             </div>
 
             <div className="w-32 h-32 bg-green-50 rounded-full border-4 border-green-200 flex items-center justify-center text-5xl mb-4 shadow-inner relative overflow-hidden">
-              {isFlower ? '🌻' : userStats.plant_growth >= 10 ? '🌿' : userStats.plant_growth >= 5 ? '🌱' : '🌰'}
+              {isFlower ? '🌻' : userStats.plant_growth >= 10 ? '🌿' : userStats.plant_growth >= 5 ? '🌱' : userStats.plant_growth >= 1 ? '🌰' : '❓'}
             </div>
             
             <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
               <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all" style={{ width: `${Math.min(100, (userStats.plant_growth % 5) * 20)}%` }}></div>
             </div>
             <p className="text-center text-xs text-gray-500 font-medium">
-              {isFlower ? '꽃이 활짝 피었어요! 축하합니다!' : '아이템을 주어 식물을 키워보세요!'}
+              {isFlower ? '꽃이 활짝 피었어요! 축하합니다!' : userStats.plant_growth === 0 ? '상점에서 씨앗을 먼저 구매해주세요!' : '아이템을 주어 식물을 키워보세요!'}
             </p>
           </div>
 
@@ -474,6 +592,16 @@ const StudentDashboard: React.FC = () => {
               <span className="text-gray-500">달성도</span>
               <span className="text-green-600">{readCategories.size} / 10</span>
             </div>
+            
+            {!isTeacherView && !isFlower && !questCategoryId && (
+              <button 
+                onClick={handleSpinRoulette}
+                className="mt-6 w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-bold rounded-xl shadow-md transition-all flex justify-center items-center gap-2 group"
+              >
+                <span className="group-hover:rotate-180 transition-transform duration-500">🎲</span> 
+                오늘의 독서 퀘스트 뽑기
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -510,6 +638,43 @@ const StudentDashboard: React.FC = () => {
                 {isSubmittingFeedback ? '전송 중...' : '전송하기'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 룰렛 모달 */}
+      {isRouletteOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-8 relative flex flex-col items-center text-center shadow-2xl">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">🎲 운명의 룰렛!</h2>
+            
+            <div className={`w-40 h-40 rounded-full flex items-center justify-center mb-6 shadow-inner border-8 transition-colors duration-200 ${rouletteResult ? rouletteResult.bgColor : 'bg-gray-100 border-gray-200'}`}>
+              <div className="text-3xl font-black text-white drop-shadow-md">
+                {rouletteResult ? rouletteResult.name : '?'}
+              </div>
+            </div>
+            
+            <div className="h-16">
+              {isSpinning ? (
+                <p className="text-gray-500 font-medium animate-pulse">두구두구두구...</p>
+              ) : (
+                <div className="animate-fade-in-up">
+                  <p className="text-indigo-600 font-bold text-lg mb-1">당첨!</p>
+                  <p className="text-gray-700 text-sm">
+                    다음 책은 <strong className="text-indigo-600">[{rouletteResult?.name}]</strong> 분야에서 골라볼까요?
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {!isSpinning && (
+              <button 
+                onClick={() => setIsRouletteOpen(false)}
+                className="mt-6 w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl shadow transition-colors"
+              >
+                퀘스트 수락하기!
+              </button>
+            )}
           </div>
         </div>
       )}
