@@ -92,7 +92,7 @@ const StudentDashboard: React.FC = () => {
           item_wind: d.item_wind || 0,
           plant_growth: d.plant_growth || 0,
           class_id: d.class_id || null
-        });
+        }));
 
         // DB에 포인트가 실제와 다르면 동기화 (선택적)
         if (d.points !== actualPoints && !isTeacherView && testPoints === 0) {
