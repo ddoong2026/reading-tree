@@ -387,6 +387,60 @@ const StudentDashboard: React.FC = () => {
             </div>
           ) : (
             <ul className="space-y-3">
+              {logs.map(log => (
+                <li key={log.id} className={`p-4 bg-blue-50/50 border ${selectedLogIds.includes(log.id) ? 'border-blue-400 bg-blue-100/50' : 'border-blue-100'} rounded-xl flex flex-col group cursor-pointer`} onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}>
+                  <div className="flex justify-between items-center w-full">
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                        checked={selectedLogIds.includes(log.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedLogIds([...selectedLogIds, log.id]);
+                          } else {
+                            setSelectedLogIds(selectedLogIds.filter(id => id !== log.id));
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="flex flex-col">
+                        <span className="font-bold text-gray-800">{log.book_title}</span>
+                        <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold text-white ${KDC_CATEGORIES.find(c => c.id === log.category)?.bgColor || 'bg-gray-400'}`}>
+                            {KDC_CATEGORIES.find(c => c.id === log.category)?.name || '분류 없음'}
+                          </span>
+                          <span>{new Date(log.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDelete(log.id, log.book_title); }}
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                      title="삭제하기"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                  {expandedLogId === log.id && (
+                    <div className="mt-4 p-4 bg-white rounded-lg border border-blue-100 cursor-default" onClick={(e) => e.stopPropagation()}>
+                      {log.image_url && (
+                        <div className="mb-4">
+                          <img src={log.image_url} alt="첨부 이미지" className="w-full max-w-md rounded-lg shadow-sm" />
+                        </div>
+                      )}
+                      {log.text_content && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-bold text-gray-700 mb-1">내용</h4>
+                          <p className="text-gray-700 whitespace-pre-wrap">{log.text_content}</p>
+                        </div>
+                      )}
+                      {log.ai_feedback && (
+                        <div className="bg-purple-50 p-4 rounded-lg mt-4 border border-purple-100">
+                          <h4 className="text-sm font-bold text-purple-800 mb-2">AI 멘토의 피드백 ✨</h4>
+                          <p className="text-purple-700 text-sm whitespace-pre-wrap leading-relaxed">{log.ai_feedback}</p>
+                        </div>
+                      )}
                       {!log.text_content && !log.image_url && !log.ai_feedback && (
                         <div className="text-gray-400 text-sm italic">내용이 없습니다.</div>
                       )}
