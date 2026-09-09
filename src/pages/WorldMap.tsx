@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, Float, Html, useProgress } from '@react-three/drei';
+import { OrbitControls, Float, Html, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { TreeModel } from '../components/world3d/TreeModel';
 import { supabase } from '../lib/supabaseClient';
