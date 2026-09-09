@@ -48,7 +48,7 @@ begin
     seed_bought_at = now(), used_water = 0, used_sun = 0, used_wind = 0,
     plant_position_x = null, plant_position_z = null
   where id = auth.uid() and points >= 1
-    and (plant_growth = 0 or (used_water >= seed_level and used_sun >= seed_level and used_wind >= seed_level and plant_growth - 1 >= seed_level * 3))
+    and (plant_growth = 0 or (used_water + used_sun + used_wind >= seed_level + 1))
   returning * into result;
   if result.id is null then raise exception 'Seed purchase is not available'; end if;
   return result;

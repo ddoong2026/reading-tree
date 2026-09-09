@@ -32,12 +32,12 @@ export const PlantModel: React.FC<PlantModelProps> = ({
     }
   });
 
-  // A seed blooms after using each item `seedLevel` times.
+  // A seed blooms after `seedLevel + 1` item uses in total.
   
   let stage = 0;
-  const requiredUses = Math.max(1, seedLevel);
-  const isItemFlower = usedWater >= requiredUses && usedSun >= requiredUses && usedWind >= requiredUses;
-  const totalRequiredGrowth = 1 + requiredUses * 3;
+  const requiredUses = Math.max(2, seedLevel + 1);
+  const isItemFlower = usedWater + usedSun + usedWind >= requiredUses;
+  const totalRequiredGrowth = 1 + requiredUses;
 
   if (isItemFlower || isFlower) {
     stage = 4;

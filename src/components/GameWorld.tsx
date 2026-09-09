@@ -244,7 +244,7 @@ const GameWorld: React.FC = () => {
 
         const plants = activeUsers.map((user) => {
           const sLevel = user.seed_level || 1;
-          const isFlower = user.used_water >= sLevel && user.used_sun >= sLevel && user.used_wind >= sLevel && (user.plant_growth - 1) >= sLevel * 3;
+          const isFlower = (user.used_water + user.used_sun + user.used_wind) >= sLevel + 1;
 
           if (user.plant_position_x == null || user.plant_position_z == null) {
             return null; // 아직 심지 않음

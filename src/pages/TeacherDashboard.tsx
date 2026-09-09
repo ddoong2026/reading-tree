@@ -780,9 +780,9 @@ const TeacherDashboard: React.FC = () => {
                     <td className="py-3 px-4 text-sm font-medium">
                       {(() => {
                         const level = student.seed_level ?? 1;
-                        const flower = (student.used_water ?? 0) >= level && (student.used_sun ?? 0) >= level && (student.used_wind ?? 0) >= level;
+                        const flower = (student.used_water ?? 0) + (student.used_sun ?? 0) + (student.used_wind ?? 0) >= level + 1;
                         if (flower) return '🌻 꽃';
-                        if ((student.plant_growth ?? 0) >= 1 + level * 2) return '🌿 성장 중';
+                        if ((student.plant_growth ?? 0) >= 1 + Math.ceil((level + 1) / 2)) return '🌿 성장 중';
                         if ((student.plant_growth ?? 0) >= 1) return '🌱 씨앗';
                         return '❌ 없음';
                       })()}

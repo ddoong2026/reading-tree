@@ -151,10 +151,7 @@ const StudentDashboard: React.FC = () => {
     }
     
     // Check if they can buy a seed (must have no plant, or current plant must be a flower)
-    const isFlower = userStats.used_water >= userStats.seed_level && 
-                     userStats.used_sun >= userStats.seed_level && 
-                     userStats.used_wind >= userStats.seed_level &&
-                     (userStats.plant_growth - 1) >= userStats.seed_level * 3;
+    const isFlower = userStats.used_water + userStats.used_sun + userStats.used_wind >= userStats.seed_level + 1;
 
     if (userStats.plant_growth > 0 && !isFlower) {
       alert("씨앗은 꽃을 피운 후에만 새로 구매할 수 있습니다.");
@@ -242,12 +239,9 @@ const StudentDashboard: React.FC = () => {
   const readCategories = React.useMemo(() => new Set(passedLogs.map(log => log.category || '000')), [passedLogs]);
   const hasAllCategories = readCategories.size >= 10;
   
-  const isPlantFlower = userStats.used_water >= userStats.seed_level && 
-                        userStats.used_sun >= userStats.seed_level && 
-                        userStats.used_wind >= userStats.seed_level &&
-                        (userStats.plant_growth - 1) >= userStats.seed_level * 3;
+  const isPlantFlower = userStats.used_water + userStats.used_sun + userStats.used_wind >= userStats.seed_level + 1;
   const plantCareCount = userStats.used_water + userStats.used_sun + userStats.used_wind;
-  const plantCareRequired = userStats.seed_level * 3;
+  const plantCareRequired = userStats.seed_level + 1;
 
   useEffect(() => {
     if (!targetUserId || loading) return;
@@ -597,7 +591,7 @@ const StudentDashboard: React.FC = () => {
               <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all" style={{ width: `${Math.min(100, (plantCareCount / plantCareRequired) * 100)}%` }}></div>
             </div>
             <p className="text-center text-xs text-gray-500 font-medium">
-              {isPlantFlower ? '꽃이 활짝 피었어요! 새로운 씨앗을 구매하세요!' : userStats.plant_growth === 0 ? '상점에서 씨앗을 먼저 구매해주세요!' : `성장 진행: ${plantCareCount} / ${plantCareRequired} (물·햇빛·바람을 각각 ${userStats.seed_level}회 사용)`}
+              {isPlantFlower ? '꽃이 활짝 피었어요! 새로운 씨앗을 구매하세요!' : userStats.plant_growth === 0 ? '상점에서 씨앗을 먼저 구매해주세요!' : `성장 진행: ${plantCareCount} / ${plantCareRequired} (아이템을 자유롭게 사용하세요)`}
             </p>
             <Link 
               to={userStats.class_id ? `/world/${userStats.class_id}` : (profile?.role !== 'student' ? "/world/class-3" : "/map")} 
