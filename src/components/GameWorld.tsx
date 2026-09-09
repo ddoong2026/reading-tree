@@ -155,6 +155,15 @@ const GameWorld: React.FC = () => {
 
     if (error) {
       alert("아이템 사용 중 오류가 발생했습니다: " + error.message);
+    } else if (profile.student_number && profile.group_code) {
+      const { data: { session } } = await supabase.auth.getSession();
+      fetch('/api/dividend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({
+          tree_exp: currentTreeExp + 1
+        })
+      }).catch(() => undefined);
     }
   };
 

@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabaseClient';
 export interface UserProfile {
   id: string;
   name: string;
+  student_number: number | null;
+  group_code: string | null;
   role: 'student' | 'teacher' | 'admin';
   class_id: string | null;
 }

@@ -11,6 +11,8 @@ interface Student {
   plant_growth?: number;
   seed_level?: number;
   tree_exp?: number;
+  student_number?: number | null;
+  group_code?: string | null;
 }
 
 interface ReadingLog {
@@ -112,7 +114,7 @@ const TeacherDashboard: React.FC = () => {
     // 1. 학생 목록 가져오기
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, name, created_at, class_id, plant_growth, seed_level, tree_exp')
+      .select('id, name, student_number, group_code, created_at, class_id, plant_growth, seed_level, tree_exp')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -261,6 +263,7 @@ const TeacherDashboard: React.FC = () => {
           id: userId,
           role: 'student',
           name: name,
+          student_number: parseInt(id, 10),
           class_id: `${schoolYear}-${g}-${c}` // 학년도-학년-반 형식으로 기본 반 저장
         });
 
@@ -376,6 +379,12 @@ const TeacherDashboard: React.FC = () => {
       setStudents(students.map(s => s.id === studentId ? { ...s, class_id: newClassId } : s));
       alert('반이 정상적으로 변경되었습니다.');
     }
+  };
+
+  const handleUpdateStudentGroup = async (studentId: string, groupCode: string) => {
+    const { error } = await supabase.from('users').update({ group_code: groupCode.trim() || null }).eq('id', studentId);
+    if (error) return alert('모둠 저장에 실패했습니다: ' + error.message);
+    setStudents(students.map(s => s.id === studentId ? { ...s, group_code: groupCode.trim() || null } : s));
   };
 
   const handleUpdatePlantStats = async (studentId: string, column: string, value: number) => {
@@ -689,6 +698,7 @@ const TeacherDashboard: React.FC = () => {
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">가입일</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">작성한 독서록</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm">소속 반</th>
+                  <th className="py-3 px-4 text-gray-500 font-semibold text-sm">모둠 코드</th>
                   <th className="py-3 px-4 text-gray-500 font-semibold text-sm text-center">관리</th>
                 </tr>
               </thead>
@@ -740,6 +750,14 @@ const TeacherDashboard: React.FC = () => {
                               <option key={cid} value={cid}>{formatClassId(cid)}</option>
                             ))}
                           </select>
+                        </td>
+                        <td className="py-3 px-4">
+                          <input
+                            defaultValue={student.group_code || ''}
+                            onBlur={(e) => handleUpdateStudentGroup(student.id, e.target.value)}
+                            placeholder="예: G1"
+                            className="w-20 p-1 border border-gray-200 rounded text-sm"
+                          />
                         </td>
                         <td className="py-3 px-4 text-center">
                           <div className="flex justify-center gap-2">
