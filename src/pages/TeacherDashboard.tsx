@@ -13,6 +13,7 @@ interface Student {
   tree_exp?: number;
   student_number?: number | null;
   group_code?: string | null;
+  role?: string;
 }
 
 interface ReadingLog {
@@ -111,11 +112,10 @@ const TeacherDashboard: React.FC = () => {
   const fetchData = async () => {
     setLoadingData(true);
     
-    // 1. 학생 목록 가져오기
+    // 1. 사용자 목록 가져오기 (학생, 교사, 관리자 포함)
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, name, student_number, group_code, created_at, class_id, plant_growth, seed_level, tree_exp')
-      .eq('role', 'student')
+      .select('id, name, student_number, group_code, created_at, class_id, plant_growth, seed_level, tree_exp, role')
       .order('name', { ascending: true });
 
     if (userError) console.error("Error fetching students:", userError);
@@ -511,7 +511,7 @@ const TeacherDashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-2xl shadow-sm text-center border-t-4 border-indigo-400">
           <h3 className="text-gray-500 font-medium mb-2">등록된 학생 수</h3>
           <p className="text-4xl font-bold text-gray-800">
-            {loadingData ? '-' : students.length}
+            {loadingData ? '-' : students.filter(s => s.role === 'student').length}
             <span className="text-xl text-gray-500 font-normal">명</span>
           </p>
         </div>
@@ -705,10 +705,10 @@ const TeacherDashboard: React.FC = () => {
               <tbody>
                 {loadingData ? (
                   <tr><td colSpan={6} className="text-center py-8 text-gray-500">데이터 불러오는 중...</td></tr>
-                ) : filteredStudents.length === 0 ? (
+                ) : filteredStudents.filter(s => s.role === 'student').length === 0 ? (
                   <tr><td colSpan={6} className="text-center py-8 text-gray-500 italic">조건에 맞는 학생이 없습니다.</td></tr>
                 ) : (
-                  filteredStudents.map(student => {
+                  filteredStudents.filter(s => s.role === 'student').map(student => {
                     const studentLogsCount = allLogs.filter(log => log.user_id === student.id).length;
                     return (
                       <tr key={student.id} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedStudentIds.includes(student.id) ? 'bg-purple-50/50' : ''}`}>
@@ -790,13 +790,13 @@ const TeacherDashboard: React.FC = () => {
       {/* 학생 식물 및 나무 관리 섹션 */}
       <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-800">학생 식물 및 나무 관리</h2>
+          <h2 className="text-xl font-semibold text-gray-800">학생(및 교사) 식물/나무 관리</h2>
         </div>
         <div className="overflow-y-auto max-h-[400px]">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b-2 border-gray-100 sticky top-0 bg-white z-10">
-                <th className="py-3 px-4 text-gray-500 font-semibold text-sm">학생</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold text-sm">사용자명 (역할)</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold text-sm">현재 식물 상태</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold text-sm">씨앗 레벨</th>
                 <th className="py-3 px-4 text-gray-500 font-semibold text-sm">나무 경험치(EXP)</th>
@@ -809,7 +809,10 @@ const TeacherDashboard: React.FC = () => {
               ) : (
                 filteredStudents.filter(s => (s.plant_growth ?? 0) > 0 || (s.tree_exp ?? 0) > 0).map(student => (
                   <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="py-3 px-4 font-medium text-gray-800">{student.name}</td>
+                    <td className="py-3 px-4 font-medium text-gray-800">
+                      {student.name}
+                      {student.role !== 'student' && <span className="ml-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">{student.role === 'admin' ? '관리자' : '교사'}</span>}
+                    </td>
                     <td className="py-3 px-4 text-sm font-medium">
                       {(student.plant_growth ?? 0) >= 10 ? '🌻 꽃' : (student.plant_growth ?? 0) >= 5 ? '🌿 새싹' : (student.plant_growth ?? 0) >= 1 ? '🌱 씨앗' : '❌ 없음'}
                     </td>
