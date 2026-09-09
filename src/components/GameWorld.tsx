@@ -82,7 +82,7 @@ const GameWorld: React.FC = () => {
   const [treeExp, setTreeExp] = useState(0);
   const [treeNextExp, setTreeNextExp] = useState(10);
 
-  const [studentsPlants, setStudentsPlants] = useState<{ id: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number], seedBoughtAt?: string | null, seedLevel: number }[]>([]);
+  const [studentsPlants, setStudentsPlants] = useState<{ id: string, ownerId: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number], seedBoughtAt?: string | null, seedLevel: number }[]>([]);
 
   // 심기 모드 관련 상태
   const [isPlantingMode, setIsPlantingMode] = useState(false);
@@ -169,7 +169,8 @@ const GameWorld: React.FC = () => {
     const fetchLogs = async () => {
       setIsLogsLoading(true);
       const student = studentsPlants.find(p => p.id === selectedStudentId);
-      let q = supabase.from('reading_logs').select('*').eq('user_id', selectedStudentId).order('created_at', { ascending: false });
+      if (!student) return;
+      let q = supabase.from('reading_logs').select('*').eq('user_id', student.ownerId).order('created_at', { ascending: false });
       
       if (!showAllLogs && student && student.seedBoughtAt) {
         q = q.gte('created_at', student.seedBoughtAt);
@@ -259,6 +260,7 @@ const GameWorld: React.FC = () => {
           
           return {
             id: user.id,
+            ownerId: user.id,
             name: user.name,
             growth: user.plant_growth || 0,
             usedWater: user.used_water || 0,
@@ -270,7 +272,25 @@ const GameWorld: React.FC = () => {
             seedLevel: sLevel
           };
         }).filter(Boolean) as typeof studentsPlants;
-        setStudentsPlants(plants);
+
+        const { data: archivedData } = await supabase
+          .from('user_plants')
+          .select('id, user_id, owner_name, seed_level, plant_growth, used_water, used_sun, used_wind, plant_position_x, plant_position_z, seed_bought_at')
+          .eq('class_id', classId || '');
+        const archivedFlowers = (archivedData || []).map(plant => ({
+          id: plant.id,
+          ownerId: plant.user_id,
+          name: plant.owner_name,
+          growth: plant.plant_growth,
+          usedWater: plant.used_water,
+          usedSun: plant.used_sun,
+          usedWind: plant.used_wind,
+          isFlower: true,
+          position: [plant.plant_position_x, 0, plant.plant_position_z] as [number, number, number],
+          seedBoughtAt: plant.seed_bought_at,
+          seedLevel: plant.seed_level,
+        }));
+        setStudentsPlants([...plants, ...archivedFlowers]);
       }
     };
     fetchPlants();
@@ -604,7 +624,7 @@ const GameWorld: React.FC = () => {
               <div className="flex items-center gap-3">
                 {profile?.role === 'admin' && (
                   <button 
-                    onClick={() => handleDeletePlant(selectedStudentId)}
+                    onClick={() => handleDeletePlant(studentsPlants.find(p => p.id === selectedStudentId)?.ownerId || selectedStudentId)}
                     className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-bold hover:bg-red-200 shadow-sm"
                   >
                     🗑️ 식물 삭제

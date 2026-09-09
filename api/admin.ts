@@ -41,6 +41,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!target) return res.status(404).json({ error: 'User not found.' });
       // Teachers may reset students and their own plant; only admins may reset another staff member.
       if (target.role !== 'student' && target.id !== actor.user.id && actor.role !== 'admin') return res.status(403).json({ error: 'You cannot reset this user.' });
+      // Archived flowers are part of the same plant reset. Ignore a missing
+      // archive table during the one-time migration rollout.
+      await admin.from('user_plants').delete().eq('user_id', studentId);
       const { data, error } = await admin.from('users').update({ plant_growth: 0, seed_level: 1, tree_exp: 0, used_water: 0, used_sun: 0, used_wind: 0, plant_position_x: null, plant_position_z: null }).eq('id', studentId).select('id').maybeSingle();
       if (error) throw error;
       if (!data) return res.status(404).json({ error: 'User not found.' });
