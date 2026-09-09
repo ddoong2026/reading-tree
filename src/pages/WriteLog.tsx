@@ -27,7 +27,6 @@ const WriteLog: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOcrDone, setIsOcrDone] = useState(false);
   const [currentLogId, setCurrentLogId] = useState<string | null>(null);
-  const [attempts, setAttempts] = useState(1);
   const [editDays, setEditDays] = useState(1);
   const [dailyAttempts, setDailyAttempts] = useState(0);
   const [lastEditDate, setLastEditDate] = useState<string | null>(null);
@@ -39,7 +38,30 @@ const WriteLog: React.FC = () => {
   const { user, profile } = useAuth();
   const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';
 
+  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
+  const [checklistTimer, setChecklistTimer] = useState(60);
+  const [checkedItems, setCheckedItems] = useState<boolean[]>(Array(6).fill(false));
+  const [showDetailedRubric, setShowDetailedRubric] = useState(false);
+  const [isSubmittingFromChecklist, setIsSubmittingFromChecklist] = useState(false);
+
+  const CHECKLIST_ITEMS = [
+    "맞춤법과 띄어쓰기를 확인하고 문장이 끝나는 곳에 알맞은 문장부호를 썼나요?",
+    "문장을 끝까지 쓰고, 읽었을 때 뜻이 자연스럽게 이어지나요?",
+    "내용이 달라지는 곳에서 문단을 나누고 들여쓰기를 했나요?",
+    "내가 왜 이 책을 골랐는지 구체적으로 썼나요?",
+    "책에서 가장 중요한 내용을 골라 내 말로 간추렸나요?",
+    "기억에 남는 부분 → 나의 생각이나 느낌 → 그렇게 생각한 까닭을 썼나요?"
+  ];
+
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (isChecklistModalOpen && isSubmittingFromChecklist && checklistTimer > 0) {
+      timer = setTimeout(() => setChecklistTimer(prev => prev - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [isChecklistModalOpen, isSubmittingFromChecklist, checklistTimer]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -97,7 +119,6 @@ const WriteLog: React.FC = () => {
           setBookTitle(data.book_title);
           setCategory(data.category);
           setText(data.text_content || '');
-          if (data.attempts) setAttempts(data.attempts);
           if (data.edit_days) setEditDays(data.edit_days);
           if (data.daily_attempts) setDailyAttempts(data.daily_attempts);
           if (data.last_edit_date) setLastEditDate(data.last_edit_date);
@@ -158,9 +179,35 @@ const WriteLog: React.FC = () => {
     setIsOcrDone(false);
   };
 
+  const handleOpenChecklistForSubmit = () => {
+    if (!text.trim() && !imageFile && !base64Image) {
+      alert('독서록 내용을 입력하거나 사진을 첨부해주세요!');
+      return;
+    }
+    if (!bookTitle.trim()) {
+      alert('책 제목을 입력해주세요!');
+      return;
+    }
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    setIsChecklistModalOpen(true);
+    setIsSubmittingFromChecklist(true);
+    setChecklistTimer(60);
+    setCheckedItems(Array(6).fill(false));
+  };
+
+  const handleOpenChecklistForView = () => {
+    setIsChecklistModalOpen(true);
+    setIsSubmittingFromChecklist(false);
+    setChecklistTimer(0);
+    setCheckedItems(Array(6).fill(false));
+  };
+
   // 제출 및 DB 연동
   const handleSubmit = async () => {
-    if (!text.trim()) {
+    if (!text.trim() && !imageFile && !base64Image) {
       alert('독서록 내용을 입력해주세요!');
       return;
     }
@@ -319,8 +366,6 @@ const WriteLog: React.FC = () => {
       }
       
       // 5. 포인트 지급 조건 확인 (70점 이상)
-      const match = aiResponse.match(/\[SCORE:\s*(\d+)\]/);
-      const score = match ? parseInt(match[1], 10) : 0;
       let earnedPoint = false;
 
       if (aiResult.success && score >= 70) {
@@ -346,7 +391,6 @@ const WriteLog: React.FC = () => {
       }
       
       setCurrentLogId(insertedData.id);
-      setAttempts(insertedData.attempts);
       setEditDays(insertedData.edit_days);
       setDailyAttempts(insertedData.daily_attempts);
       setLastEditDate(insertedData.last_edit_date);
@@ -433,16 +477,24 @@ const WriteLog: React.FC = () => {
             <div className="flex justify-between items-end mb-2">
               <label className="block text-gray-700 font-semibold">기억에 남는 내용이나 느낌을 적어보세요!</label>
               
-              {/* UDL: 마이크(STT) 버튼 */}
-              <button 
-                onClick={handleToggleRecord}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-colors ${
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleOpenChecklistForView}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-colors bg-purple-100 text-purple-700 hover:bg-purple-200"
+                >
+                  📝 체크리스트
+                </button>
+                {/* UDL: 마이크(STT) 버튼 */}
+                <button 
+                  onClick={handleToggleRecord}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-colors ${
                   isRecording ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                 }`}
               >
-                <Mic size={18} />
-                {isRecording ? '듣는 중...' : '말로 쓰기'}
-              </button>
+                  <Mic size={18} />
+                  {isRecording ? '듣는 중...' : '말로 쓰기'}
+                </button>
+              </div>
             </div>
             
             <textarea
@@ -506,8 +558,8 @@ const WriteLog: React.FC = () => {
           </div>
 
             <button 
-              onClick={handleSubmit}
-              disabled={isSubmitting || !bookTitle || (!text && !imageFile)}
+              onClick={handleOpenChecklistForSubmit}
+              disabled={isSubmitting || !bookTitle || (!text && !imageFile && !base64Image)}
               className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-2xl shadow-md flex justify-center items-center gap-2 transition-colors text-lg disabled:opacity-50"
             >
               <Send size={20} />
@@ -515,6 +567,161 @@ const WriteLog: React.FC = () => {
                 ? (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출 중...' : '저장 중...') 
                 : (imageType === 'handwriting' && base64Image && !isOcrDone ? '글자 추출하기' : '다 썼어요! (제출하기)')}
             </button>
+          </div>
+        )}
+
+        {/* 체크리스트 모달 */}
+        {isChecklistModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-5xl shadow-xl max-h-[90vh] flex flex-col">
+              <div className="flex justify-between items-center mb-4 shrink-0">
+                <h2 className="text-2xl font-bold text-gray-800">✏️ 제출하기 전, 이것만은 꼭 확인해요!</h2>
+                <button onClick={() => setIsChecklistModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-bold text-xl">✕</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto mb-4 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left: User Text (Readonly) */}
+                <div className="flex flex-col h-full border border-gray-200 rounded-xl bg-gray-50 p-4">
+                  <h3 className="font-bold text-gray-700 mb-2">내가 쓴 독서록</h3>
+                  <div className="flex-1 overflow-y-auto whitespace-pre-wrap text-gray-800 text-sm">
+                    {text || (imagePreview ? "사진이 첨부되었습니다." : "내용이 없습니다.")}
+                  </div>
+                </div>
+                
+                {/* Right: Checklist or Rubric */}
+                <div className="flex flex-col">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-gray-700">체크리스트</h3>
+                    <button 
+                      onClick={() => setShowDetailedRubric(!showDetailedRubric)}
+                      className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors"
+                    >
+                      {showDetailedRubric ? "체크리스트 보기" : "평가표 자세히 보기"}
+                    </button>
+                  </div>
+
+                  {!showDetailedRubric ? (
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+                      {CHECKLIST_ITEMS.map((item, index) => (
+                        <label key={index} className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-green-50 transition-colors">
+                          <input 
+                            type="checkbox" 
+                            className="w-5 h-5 mt-0.5 text-green-500 rounded focus:ring-green-400" 
+                            checked={checkedItems[index]}
+                            onChange={(e) => {
+                              const newChecked = [...checkedItems];
+                              newChecked[index] = e.target.checked;
+                              setCheckedItems(newChecked);
+                            }}
+                          />
+                          <span className="text-gray-700 text-sm leading-relaxed">{item}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex-1 overflow-y-auto pr-2">
+                      <table className="w-full text-xs text-left border-collapse border border-gray-200">
+                        <thead className="bg-gray-100 sticky top-0">
+                          <tr>
+                            <th className="p-2 border border-gray-200 font-bold whitespace-nowrap">영역</th>
+                            <th className="p-2 border border-gray-200 font-bold whitespace-nowrap">평가 항목</th>
+                            <th className="p-2 border border-gray-200 font-bold whitespace-nowrap">배점</th>
+                            <th className="p-2 border border-gray-200 font-bold">🌟 잘했어요 (충족)</th>
+                            <th className="p-2 border border-gray-200 font-bold">😐 조금 더 써 봐요 (부분 충족)</th>
+                            <th className="p-2 border border-gray-200 font-bold">🔧 고쳐 써 봐요 (결손)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="p-2 border border-gray-200 font-semibold" rowSpan={3}>글쓰기</td>
+                            <td className="p-2 border border-gray-200 font-medium">맞춤법과 문장부호</td>
+                            <td className="p-2 border border-gray-200 text-center">15점</td>
+                            <td className="p-2 border border-gray-200">맞춤법과 띄어쓰기를 거의 바르게 썼고, 마침표나 따옴표 같은 문장부호도 알맞게 사용했어요.</td>
+                            <td className="p-2 border border-gray-200">몇 군데 틀린 곳이 있지만 글을 읽고 이해하는 데 큰 어려움은 없어요.</td>
+                            <td className="p-2 border border-gray-200">틀린 맞춤법이나 띄어쓰기가 자주 나오거나, 문장부호가 빠져 글을 읽기 어려운 부분이 있어요.</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 border border-gray-200 font-medium">알맞은 문장 쓰기</td>
+                            <td className="p-2 border border-gray-200 text-center">15점</td>
+                            <td className="p-2 border border-gray-200">문장을 끝까지 완성해서 썼고, 앞뒤 문장이 자연스럽게 이어져요. 글의 뜻을 쉽게 이해할 수 있어요.</td>
+                            <td className="p-2 border border-gray-200">어색하거나 너무 긴 문장이 조금 있지만 전체 내용은 이해할 수 있어요.</td>
+                            <td className="p-2 border border-gray-200">끝나지 않은 문장이나 너무 길고 어색한 문장이 많아 뜻을 이해하기 어려워요.</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 border border-gray-200 font-medium">문단 나누기와 들여쓰기</td>
+                            <td className="p-2 border border-gray-200 text-center">10점</td>
+                            <td className="p-2 border border-gray-200">내용이 달라지는 곳에서 문단을 알맞게 나누고, 새로운 문단을 시작할 때 들여쓰기를 했어요.</td>
+                            <td className="p-2 border border-gray-200">문단을 나누기는 했지만 내용에 맞지 않는 부분이 있거나 들여쓰기를 빠뜨린 곳이 있어요.</td>
+                            <td className="p-2 border border-gray-200">글을 거의 한 문단으로 썼거나, 내용이 달라져도 문단을 나누지 않았어요.</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 border border-gray-200 font-semibold" rowSpan={2}>책 내용</td>
+                            <td className="p-2 border border-gray-200 font-medium">이 책을 고른 까닭</td>
+                            <td className="p-2 border border-gray-200 text-center">10점</td>
+                            <td className="p-2 border border-gray-200">내가 왜 이 책을 골랐는지 구체적으로 설명했어요. 제목, 표지, 나의 관심이나 경험, 추천받은 일 등을 까닭과 함께 썼어요.</td>
+                            <td className="p-2 border border-gray-200">책을 고른 까닭은 있지만 "재미있어 보여서"처럼 간단하게만 썼어요.</td>
+                            <td className="p-2 border border-gray-200">내가 왜 이 책을 골랐는지 쓰지 않았거나 까닭을 알기 어려워요.</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 border border-gray-200 font-medium">중요한 내용 간추리기</td>
+                            <td className="p-2 border border-gray-200 text-center">25점</td>
+                            <td className="p-2 border border-gray-200">책에서 꼭 필요한 중요한 내용을 골라 내 말로 알기 쉽게 정리했어요. 내 독서록만 읽어도 어떤 책인지 대체로 알 수 있어요.</td>
+                            <td className="p-2 border border-gray-200">책의 내용은 썼지만 중요한 내용이 빠졌거나 필요하지 않은 내용을 너무 많이 썼어요.</td>
+                            <td className="p-2 border border-gray-200">책의 중요한 내용이 거의 없거나 책의 내용을 이해하기 어려워요.</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 border border-gray-200 font-semibold">나의 생각</td>
+                            <td className="p-2 border border-gray-200 font-medium">기억에 남는 부분과 나의 생각</td>
+                            <td className="p-2 border border-gray-200 text-center">25점</td>
+                            <td className="p-2 border border-gray-200">기억에 남는 부분을 구체적으로 쓰고 내 생각이나 느낌과 그 까닭을 함께 설명했어요. 내 경험이나 '나라면 어떻게 했을지' 등으로 생각을 넓혀 썼어요.</td>
+                            <td className="p-2 border border-gray-200">기억에 남는 부분과 생각은 썼지만 왜 그렇게 생각했는지 설명이 부족해요.</td>
+                            <td className="p-2 border border-gray-200">줄거리만 쓰거나 "재미있었다", "슬펐다"처럼 간단한 느낌만 썼어요.</td>
+                          </tr>
+                          <tr className="bg-gray-100 font-bold">
+                            <td className="p-2 border border-gray-200 text-center" colSpan={2}>합계</td>
+                            <td className="p-2 border border-gray-200 text-center">100점</td>
+                            <td className="p-2 border border-gray-200" colSpan={3}></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="shrink-0 flex justify-end gap-3 border-t border-gray-100 pt-4">
+                {isSubmittingFromChecklist && checklistTimer > 0 && (
+                  <div className="flex items-center gap-2 mr-auto bg-gray-100 px-4 py-2 rounded-full">
+                    <span className="text-gray-500 font-medium text-sm">꼼꼼히 읽어보세요</span>
+                    <span className="text-red-500 font-bold">⏳ {checklistTimer}초 후 제출 가능</span>
+                  </div>
+                )}
+
+                <button 
+                  onClick={() => setIsChecklistModalOpen(false)}
+                  className="px-6 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  닫기
+                </button>
+                
+                {isSubmittingFromChecklist && (
+                  <button 
+                    onClick={() => {
+                      setIsChecklistModalOpen(false);
+                      handleSubmit();
+                    }}
+                    disabled={checklistTimer > 0 || isSubmitting}
+                    className={`px-6 py-2 font-bold rounded-xl shadow-md transition-colors ${
+                      checklistTimer > 0 
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                        : 'bg-green-500 hover:bg-green-600 text-white'
+                    }`}
+                  >
+                    진짜 제출하기
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
