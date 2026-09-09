@@ -222,30 +222,7 @@ const StudentDashboard: React.FC = () => {
     }).eq('id', targetUserId);
   };
 
-  const handleUseItem = async (itemType: 'water' | 'sun' | 'wind') => {
-    const column = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
-    const currentCount = userStats[column];
-    
-    if (currentCount <= 0) {
-      alert("아이템이 부족합니다! 상점에서 먼저 구매해주세요.");
-      return;
-    }
 
-    const newStats = { 
-      ...userStats, 
-      [column]: currentCount - 1,
-      plant_growth: userStats.plant_growth + 1
-    };
-
-    setUserStats(newStats);
-
-    await supabase.from('users').update({ 
-      [column]: newStats[column],
-      plant_growth: newStats.plant_growth
-    }).eq('id', targetUserId);
-    
-    alert("식물에게 아이템을 주었습니다! 식물이 조금 성장했어요.");
-  };
 
   const handleSubmitFeedback = async () => {
     if (!feedbackText.trim()) return;
@@ -278,7 +255,12 @@ const StudentDashboard: React.FC = () => {
   }, [logs]);
 
   const readCategories = React.useMemo(() => new Set(passedLogs.map(log => log.category || '000')), [passedLogs]);
-  const isFlower = readCategories.size >= 10;
+  const hasAllCategories = readCategories.size >= 10;
+  
+  const isPlantFlower = userStats.used_water >= userStats.seed_level && 
+                        userStats.used_sun >= userStats.seed_level && 
+                        userStats.used_wind >= userStats.seed_level &&
+                        (userStats.plant_growth - 1) >= userStats.seed_level * 3;
 
   useEffect(() => {
     if (!targetUserId || loading) return;
@@ -554,8 +536,8 @@ const StudentDashboard: React.FC = () => {
             <div className="grid grid-cols-4 gap-2">
               <button 
                 onClick={() => handleBuySeed()}
-                disabled={isTeacherView || userStats.plant_growth > 0}
-                className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth > 0 ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-amber-50 border-amber-200'}`}
+                disabled={isTeacherView || (userStats.plant_growth > 0 && !isPlantFlower)}
+                className={`flex flex-col items-center p-2 rounded-xl shadow-sm border transition-colors ${userStats.plant_growth > 0 && !isPlantFlower ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-white hover:bg-amber-50 border-amber-200'}`}
               >
                 <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center mb-1 p-1">
                   <img src="/seed.png" alt="씨앗" className="w-full h-full object-contain" />
@@ -601,34 +583,34 @@ const StudentDashboard: React.FC = () => {
             
             <div className="w-full flex justify-between text-sm font-bold text-gray-500 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('water')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 p-1 ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 p-1">
                   <img src="/water.png" alt="물" className="w-full h-full object-contain" />
-                </button>
+                </div>
                 <span>x {userStats.item_water}</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('sun')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform flex items-center justify-center w-8 h-8 rounded-full bg-red-100 p-1 ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 p-1">
                   <img src="/sun.png" alt="햇빛" className="w-full h-full object-contain" />
-                </button>
+                </div>
                 <span>x {userStats.item_sun}</span>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <button onClick={() => handleUseItem('wind')} disabled={isTeacherView || userStats.plant_growth === 0} className={`hover:scale-110 transition-transform flex items-center justify-center w-8 h-8 rounded-full bg-teal-100 p-1 ${userStats.plant_growth === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-teal-100 p-1">
                   <img src="/wind.png" alt="바람" className="w-full h-full object-contain" />
-                </button>
+                </div>
                 <span>x {userStats.item_wind}</span>
               </div>
             </div>
 
             <div className="w-32 h-32 bg-green-50 rounded-full border-4 border-green-200 flex items-center justify-center text-5xl mb-4 shadow-inner relative overflow-hidden p-2">
-              {isFlower ? '🌻' : userStats.plant_growth >= 10 ? '🌿' : userStats.plant_growth >= 5 ? '🌱' : userStats.plant_growth >= 1 ? <img src="/seed.png" alt="씨앗" className="w-16 h-16 object-contain" /> : '❓'}
+              {isPlantFlower ? '🌻' : userStats.plant_growth >= 10 ? '🌿' : userStats.plant_growth >= 5 ? '🌱' : userStats.plant_growth >= 1 ? <img src="/seed.png" alt="씨앗" className="w-16 h-16 object-contain" /> : '❓'}
             </div>
             
             <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
               <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all" style={{ width: `${Math.min(100, (userStats.plant_growth % 5) * 20)}%` }}></div>
             </div>
             <p className="text-center text-xs text-gray-500 font-medium">
-              {isFlower ? '꽃이 활짝 피었어요! 축하합니다!' : userStats.plant_growth === 0 ? '상점에서 씨앗을 먼저 구매해주세요!' : '아이템을 주어 식물을 키워보세요!'}
+              {isPlantFlower ? '꽃이 활짝 피었어요! 새로운 씨앗을 구매하세요!' : userStats.plant_growth === 0 ? '상점에서 씨앗을 먼저 구매해주세요!' : '아이템을 주어 식물을 키워보세요!'}
             </p>
             <Link 
               to="/map" 
@@ -674,7 +656,7 @@ const StudentDashboard: React.FC = () => {
               <span className="text-green-600">{readCategories.size} / 10</span>
             </div>
             
-            {!isTeacherView && !isFlower && !questCategoryId && (
+            {!isTeacherView && !hasAllCategories && !questCategoryId && (
               hasCompletedToday ? (
                 <div className="mt-6 w-full py-3 bg-gray-100 text-gray-500 font-bold rounded-xl text-center border border-gray-200 shadow-sm">
                   👏 오늘의 퀘스트를 완료했습니다! 내일 다시 뽑아주세요.

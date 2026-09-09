@@ -8,6 +8,9 @@ interface Student {
   name: string;
   created_at: string;
   class_id?: string | null;
+  plant_growth?: number;
+  seed_level?: number;
+  tree_exp?: number;
 }
 
 interface ReadingLog {
@@ -109,7 +112,7 @@ const TeacherDashboard: React.FC = () => {
     // 1. 학생 목록 가져오기
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, name, created_at, class_id')
+      .select('id, name, created_at, class_id, plant_growth, seed_level, tree_exp')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -372,6 +375,42 @@ const TeacherDashboard: React.FC = () => {
       // update local state
       setStudents(students.map(s => s.id === studentId ? { ...s, class_id: newClassId } : s));
       alert('반이 정상적으로 변경되었습니다.');
+    }
+  };
+
+  const handleUpdatePlantStats = async (studentId: string, column: string, value: number) => {
+    if (isNaN(value)) return;
+    const { error } = await supabaseAdmin
+      .from('users')
+      .update({ [column]: value })
+      .eq('id', studentId);
+
+    if (error) {
+      alert(`업데이트 실패: ${error.message}`);
+    } else {
+      setStudents(students.map(s => s.id === studentId ? { ...s, [column]: value } : s));
+    }
+  };
+
+  const handleDeletePlant = async (studentId: string, name: string) => {
+    if (!window.confirm(`[${name}] 학생의 식물을 정말 삭제하시겠습니까?\n(씨앗 레벨 1, 경험치 0, 심기 상태 초기화)`)) return;
+    
+    const { error } = await supabaseAdmin.from('users').update({ 
+      plant_growth: 0,
+      seed_level: 1,
+      tree_exp: 0,
+      used_water: 0,
+      used_sun: 0,
+      used_wind: 0,
+      plant_position_x: null,
+      plant_position_z: null
+    }).eq('id', studentId);
+    
+    if (error) {
+      alert(`삭제 실패: ${error.message}`);
+    } else {
+      setStudents(students.map(s => s.id === studentId ? { ...s, plant_growth: 0, seed_level: 1, tree_exp: 0 } : s));
+      alert('식물이 성공적으로 삭제되었습니다.');
     }
   };
 
@@ -727,6 +766,68 @@ const TeacherDashboard: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* 학생 식물 및 나무 관리 섹션 */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">학생 식물 및 나무 관리</h2>
+        </div>
+        <div className="overflow-y-auto max-h-[400px]">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-100 sticky top-0 bg-white z-10">
+                <th className="py-3 px-4 text-gray-500 font-semibold text-sm">학생</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold text-sm">현재 식물 상태</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold text-sm">씨앗 레벨</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold text-sm">나무 경험치(EXP)</th>
+                <th className="py-3 px-4 text-gray-500 font-semibold text-sm text-center">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredStudents.filter(s => (s.plant_growth ?? 0) > 0 || (s.tree_exp ?? 0) > 0).length === 0 ? (
+                <tr><td colSpan={5} className="text-center py-8 text-gray-500 italic">현재 심어진 식물이나 나무가 없습니다.</td></tr>
+              ) : (
+                filteredStudents.filter(s => (s.plant_growth ?? 0) > 0 || (s.tree_exp ?? 0) > 0).map(student => (
+                  <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td className="py-3 px-4 font-medium text-gray-800">{student.name}</td>
+                    <td className="py-3 px-4 text-sm font-medium">
+                      {(student.plant_growth ?? 0) >= 10 ? '🌻 꽃' : (student.plant_growth ?? 0) >= 5 ? '🌿 새싹' : (student.plant_growth ?? 0) >= 1 ? '🌱 씨앗' : '❌ 없음'}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          defaultValue={student.seed_level ?? 1} 
+                          onBlur={(e) => handleUpdatePlantStats(student.id, 'seed_level', parseInt(e.target.value))}
+                          className="w-20 p-1 border border-gray-200 rounded text-sm text-gray-700 focus:outline-none focus:border-purple-400"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          defaultValue={student.tree_exp ?? 0} 
+                          onBlur={(e) => handleUpdatePlantStats(student.id, 'tree_exp', parseInt(e.target.value))}
+                          className="w-20 p-1 border border-gray-200 rounded text-sm text-gray-700 focus:outline-none focus:border-purple-400"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <button 
+                        onClick={() => handleDeletePlant(student.id, student.name)}
+                        className="px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-bold transition-colors"
+                      >
+                        식물 삭제
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
