@@ -27,6 +27,7 @@ interface UserStats {
   used_water: number;
   used_sun: number;
   used_wind: number;
+  rabbit_count: number;
 }
 
 const StudentDashboard: React.FC = () => {
@@ -38,7 +39,7 @@ const StudentDashboard: React.FC = () => {
   const [studentName, setStudentName] = useState<string>('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null, seed_level: 1, used_water: 0, used_sun: 0, used_wind: 0 });
+  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null, seed_level: 1, used_water: 0, used_sun: 0, used_wind: 0, rabbit_count: 0 });
 
   // 건의사항 관련 상태
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -69,7 +70,7 @@ const StudentDashboard: React.FC = () => {
           .order('created_at', { ascending: false }),
         supabase
           .from('users')
-          .select('name, points, item_water, item_sun, item_wind, plant_growth, class_id, seed_level, used_water, used_sun, used_wind')
+          .select('name, points, item_water, item_sun, item_wind, plant_growth, class_id, seed_level, used_water, used_sun, used_wind, rabbit_count')
           .eq('id', targetUserId)
           .single()
       ]);
@@ -93,7 +94,8 @@ const StudentDashboard: React.FC = () => {
           seed_level: d.seed_level || 1,
           used_water: d.used_water || 0,
           used_sun: d.used_sun || 0,
-          used_wind: d.used_wind || 0
+          used_wind: d.used_wind || 0,
+          rabbit_count: d.rabbit_count || 0
         }));
       }
       setLoading(false);
@@ -202,6 +204,23 @@ const StudentDashboard: React.FC = () => {
       return;
     }
     setUserStats(prev => ({ ...prev, points: data.points, [dbColumn]: data[dbColumn] }));
+  };
+
+  const handleBuyRabbit = async () => {
+    if (userStats.points < 3) {
+      alert('토끼 친구를 맞이하려면 3포인트가 필요해요.');
+      return;
+    }
+    if (!window.confirm('3 포인트로 숲 토끼 친구를 맞이하시겠습니까?')) return;
+    if (isTeacherView) return;
+
+    const { data, error } = await supabase.rpc('buy_rabbit_companion');
+    if (error || !data) {
+      alert(`토끼 친구 구매에 실패했습니다: ${error?.message ?? '알 수 없는 오류'}`);
+      return;
+    }
+    setUserStats(prev => ({ ...prev, points: data.points, rabbit_count: data.rabbit_count }));
+    alert('토끼 친구가 숲에 왔어요! 식물이 있는 숲에서 만나보세요.');
   };
 
 
@@ -512,7 +531,7 @@ const StudentDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
-            <p className="text-sm text-amber-700 mb-4 font-medium">독서록을 쓰고 모은 포인트로 식물을 키울 아이템을 사보세요! (각 1P)</p>
+            <p className="text-sm text-amber-700 mb-4 font-medium">독서록을 쓰고 모은 포인트로 식물 아이템과 숲 친구를 사보세요!</p>
             
             <div className="grid grid-cols-4 gap-2">
               <button 
@@ -554,6 +573,16 @@ const StudentDashboard: React.FC = () => {
                   <img src="/wind.png" alt="바람" className="w-full h-full object-contain drop-shadow-sm" />
                 </div>
                 <span className="text-xs font-bold text-gray-700">바람 쐬기</span>
+              </button>
+              <button
+                onClick={handleBuyRabbit}
+                disabled={isTeacherView}
+                className="flex flex-col items-center p-2 rounded-xl shadow-sm border bg-white hover:bg-lime-50 border-lime-200 transition-colors disabled:bg-gray-100 disabled:opacity-50"
+              >
+                <div className="w-10 h-10 bg-lime-100 rounded-full flex items-center justify-center mb-1 overflow-hidden">
+                  <img src="/animals/rabbit-companion.png" alt="토끼 친구" className="w-full h-full object-contain" />
+                </div>
+                <span className="text-xs font-bold text-gray-700">토끼 친구 · 3P</span>
               </button>
             </div>
           </div>

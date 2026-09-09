@@ -9,6 +9,7 @@ import { TreeModel } from './world3d/TreeModel';
 import { CharacterModel } from './world3d/CharacterModel';
 import { PlantModel } from './world3d/PlantModel';
 import { ItemEffectModel } from './world3d/ItemEffectModel';
+import { RabbitModel } from './world3d/RabbitModel';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 
@@ -83,6 +84,7 @@ const GameWorld: React.FC = () => {
   const [treeNextExp, setTreeNextExp] = useState(10);
 
   const [studentsPlants, setStudentsPlants] = useState<{ id: string, ownerId: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number], seedBoughtAt?: string | null, seedLevel: number }[]>([]);
+  const [forestRabbits, setForestRabbits] = useState<{ id: string; position: [number, number, number] }[]>([]);
 
   // 심기 모드 관련 상태
   const [isPlantingMode, setIsPlantingMode] = useState(false);
@@ -96,7 +98,18 @@ const GameWorld: React.FC = () => {
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [showAllLogs, setShowAllLogs] = useState(false);
 
-  const [myInventory, setMyInventory] = useState<{ water: number; sun: number; wind: number; plantGrowth: number; plantPosX: number | null, plantPosZ: number | null }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null, plantPosZ: null });
+  const [myInventory, setMyInventory] = useState<{
+    water: number;
+    sun: number;
+    wind: number;
+    plantGrowth: number;
+    plantPosX: number | null;
+    plantPosZ: number | null;
+    usedWater: number;
+    usedSun: number;
+    usedWind: number;
+    seedLevel: number;
+  }>({ water: 0, sun: 0, wind: 0, plantGrowth: 0, plantPosX: null, plantPosZ: null, usedWater: 0, usedSun: 0, usedWind: 0, seedLevel: 1 });
 
   // 애니메이션 이펙트 상태
   const [activeEffects, setActiveEffects] = useState<{ id: string, type: 'water' | 'sun' | 'wind', position: [number, number, number] }[]>([]);
@@ -105,6 +118,10 @@ const GameWorld: React.FC = () => {
     if (!profile) return;
     if (myInventory.plantGrowth === 0 || myInventory.plantPosX == null) {
       alert("씨앗을 먼저 심어주세요!");
+      return;
+    }
+    if (isMyPlantFlower) {
+      alert("이미 꽃이 된 식물에는 아이템을 사용할 수 없어요. 새 씨앗을 심은 뒤 사용해주세요.");
       return;
     }
     const currentCount = myInventory[itemType];
@@ -139,6 +156,10 @@ const GameWorld: React.FC = () => {
       plantGrowth: updatedUser.plant_growth,
       plantPosX: updatedUser.plant_position_x,
       plantPosZ: updatedUser.plant_position_z,
+      usedWater: updatedUser.used_water,
+      usedSun: updatedUser.used_sun,
+      usedWind: updatedUser.used_wind,
+      seedLevel: updatedUser.seed_level,
     });
     setStudentsPlants(prev => prev.map(p => p.id === profile.id ? {
       ...p,
@@ -185,14 +206,14 @@ const GameWorld: React.FC = () => {
 
   React.useEffect(() => {
     const fetchPlants = async () => {
-      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp');
+      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp, rabbit_count');
       if (classId) {
         userQuery = userQuery.eq('class_id', classId);
       }
       let { data: usersData } = await userQuery;
 
       if (profile?.id) {
-        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp').eq('id', profile.id).single();
+        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp, rabbit_count').eq('id', profile.id).single();
         if (meData) {
           // meData를 가져오자마자 무조건 내 인벤토리를 업데이트!
           setMyInventory({ 
@@ -201,7 +222,11 @@ const GameWorld: React.FC = () => {
             wind: meData.item_wind || 0,
             plantGrowth: meData.plant_growth || 0,
             plantPosX: meData.plant_position_x,
-            plantPosZ: meData.plant_position_z
+            plantPosZ: meData.plant_position_z,
+            usedWater: meData.used_water || 0,
+            usedSun: meData.used_sun || 0,
+            usedWind: meData.used_wind || 0,
+            seedLevel: meData.seed_level || 1,
           });
 
           if (!usersData) usersData = [];
@@ -291,6 +316,13 @@ const GameWorld: React.FC = () => {
           seedLevel: plant.seed_level,
         }));
         setStudentsPlants([...plants, ...archivedFlowers]);
+        setForestRabbits(plants.flatMap((plant) => {
+          const owner = activeUsers.find((user) => user.id === plant.ownerId);
+          return Array.from({ length: owner?.rabbit_count || 0 }, (_, index) => ({
+            id: `${plant.ownerId}-rabbit-${index}`,
+            position: [plant.position[0] + 1 + index * 0.65, 0, plant.position[2] + 0.7] as [number, number, number],
+          }));
+        }));
       }
     };
     fetchPlants();
@@ -381,6 +413,9 @@ const GameWorld: React.FC = () => {
 
   // 실제 씨앗 보유 여부 (상태에서 즉시 도출)
   const actualHasSeed = myInventory.plantGrowth > 0 && myInventory.plantPosX == null;
+  const isMyPlantFlower = myInventory.plantGrowth > 0
+    && myInventory.usedWater + myInventory.usedSun + myInventory.usedWind >= myInventory.seedLevel + 1;
+  const canUsePlantItems = myInventory.plantGrowth > 0 && myInventory.plantPosX != null && !isMyPlantFlower;
 
   return (
     <div className="relative w-full h-screen bg-sky-200 overflow-hidden">
@@ -435,6 +470,7 @@ const GameWorld: React.FC = () => {
               )}
             </group>
           ))}
+          {forestRabbits.map((rabbit) => <RabbitModel key={rabbit.id} position={rabbit.position} />)}
           
           {/* 애니메이션 렌더링 */}
           {activeEffects.map(effect => (
@@ -557,27 +593,35 @@ const GameWorld: React.FC = () => {
             </div>
             <button 
               onClick={() => handleUseItemInWorld('water')}
-              className="flex items-center gap-1 font-bold text-blue-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-blue-100"
+              disabled={!canUsePlantItems}
+              title={isMyPlantFlower ? '꽃이 된 식물에는 아이템을 사용할 수 없어요.' : undefined}
+              className="flex items-center gap-1 font-bold text-blue-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-blue-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <img src="/water.png" alt="물" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span>x {myInventory.water}</span>
             </button>
             <button 
               onClick={() => handleUseItemInWorld('sun')}
-              className="flex items-center gap-1 font-bold text-red-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-red-100"
+              disabled={!canUsePlantItems}
+              title={isMyPlantFlower ? '꽃이 된 식물에는 아이템을 사용할 수 없어요.' : undefined}
+              className="flex items-center gap-1 font-bold text-red-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-red-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <img src="/sun.png" alt="햇빛" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span>x {myInventory.sun}</span>
             </button>
             <button 
               onClick={() => handleUseItemInWorld('wind')}
-              className="flex items-center gap-1 font-bold text-teal-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-teal-100"
+              disabled={!canUsePlantItems}
+              title={isMyPlantFlower ? '꽃이 된 식물에는 아이템을 사용할 수 없어요.' : undefined}
+              className="flex items-center gap-1 font-bold text-teal-600 hover:scale-110 transition-transform bg-white/50 px-2 py-1 rounded-lg shadow-sm border border-teal-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <img src="/wind.png" alt="바람" className="w-6 h-6 object-contain drop-shadow-sm" /> 
               <span>x {myInventory.wind}</span>
             </button>
           </div>
-          <p className="text-[10px] text-green-700 font-bold leading-tight mt-1">아이템을 클릭하여 내 식물을 바로 키울 수 있어요!</p>
+          <p className="text-[10px] text-green-700 font-bold leading-tight mt-1">
+            {isMyPlantFlower ? '꽃이 완성되어 아이템 사용이 잠시 잠겼어요. 새 씨앗을 심어주세요!' : '아이템을 클릭하여 내 식물을 바로 키울 수 있어요!'}
+          </p>
         </div>
       </div>
 
