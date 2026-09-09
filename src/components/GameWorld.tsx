@@ -113,21 +113,6 @@ const GameWorld: React.FC = () => {
       return;
     }
 
-    const usedColumn = `used_${itemType}` as 'used_water' | 'used_sun' | 'used_wind';
-    const newGrowth = myInventory.plantGrowth + 1;
-    const newCount = currentCount - 1;
-
-    // 낙관적 업데이트
-    setMyInventory(prev => ({
-      ...prev,
-      [itemType]: newCount,
-      plantGrowth: newGrowth
-    }));
-
-    setStudentsPlants(prev => prev.map(p => 
-      p.id === profile.id ? { ...p, growth: newGrowth, [usedColumn]: (p[usedColumn as keyof typeof p] as number || 0) + 1 } : p
-    ));
-
     // 애니메이션 이펙트 추가 (3초 뒤 자동 제거)
     const effectId = Date.now().toString() + Math.random().toString();
     const me = studentsPlants.find(p => p.id === profile.id);
@@ -140,9 +125,31 @@ const GameWorld: React.FC = () => {
 
     const { data: updatedUser, error } = await supabase.rpc('use_plant_item', { p_item: itemType });
 
-    if (error) {
-      alert("아이템 사용 중 오류가 발생했습니다: " + error.message);
-    } else if (profile.student_number && profile.group_code && updatedUser) {
+    if (error || !updatedUser) {
+      alert("아이템 사용 중 오류가 발생했습니다: " + (error?.message || '서버 응답이 없습니다.'));
+      return;
+    }
+
+    // DB가 확정한 값을 사용한다. 3D 모델은 camelCase 필드를 읽으므로
+    // 서버의 snake_case 결과를 여기서 명확히 변환한다.
+    setMyInventory({
+      water: updatedUser.item_water,
+      sun: updatedUser.item_sun,
+      wind: updatedUser.item_wind,
+      plantGrowth: updatedUser.plant_growth,
+      plantPosX: updatedUser.plant_position_x,
+      plantPosZ: updatedUser.plant_position_z,
+    });
+    setStudentsPlants(prev => prev.map(p => p.id === profile.id ? {
+      ...p,
+      growth: updatedUser.plant_growth,
+      usedWater: updatedUser.used_water,
+      usedSun: updatedUser.used_sun,
+      usedWind: updatedUser.used_wind,
+      isFlower: updatedUser.used_water + updatedUser.used_sun + updatedUser.used_wind >= p.seedLevel + 1,
+    } : p));
+
+    if (profile.student_number && profile.group_code) {
       const { data: { session } } = await supabase.auth.getSession();
       fetch('/api/dividend', {
         method: 'POST',
