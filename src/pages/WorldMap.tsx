@@ -4,6 +4,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Float, Html, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { TreeModel } from '../components/world3d/TreeModel';
+import { supabase } from '../lib/supabaseClient';
 
 // --- 카메라 애니메이션 (줌인 & 전환) ---
 const CameraRig: React.FC<{ targetIsland: THREE.Vector3 | null, onReached: () => void }> = ({ targetIsland, onReached }) => {
@@ -32,20 +33,20 @@ const CameraRig: React.FC<{ targetIsland: THREE.Vector3 | null, onReached: () =>
   return null;
 };
 
-// --- 심플 구름 장식 (최적화용) ---
-const SimpleCloud: React.FC<{ position: [number, number, number], scale?: number, opacity?: number }> = ({ position, scale = 1, opacity = 0.8 }) => (
+// --- 심플 구름 장식 (최적화용 - 투명도 제거) ---
+const SimpleCloud: React.FC<{ position: [number, number, number], scale?: number }> = ({ position, scale = 1 }) => (
   <group position={position} scale={scale}>
     <mesh position={[-1, 0, 0]}>
-      <sphereGeometry args={[1, 12, 12]} />
-      <meshStandardMaterial color="#ffffff" transparent opacity={opacity} roughness={1} flatShading />
+      <sphereGeometry args={[1, 8, 8]} />
+      <meshStandardMaterial color="#ffffff" roughness={1} flatShading />
     </mesh>
     <mesh position={[1, -0.2, 0]}>
-      <sphereGeometry args={[0.8, 12, 12]} />
-      <meshStandardMaterial color="#ffffff" transparent opacity={opacity} roughness={1} flatShading />
+      <sphereGeometry args={[0.8, 8, 8]} />
+      <meshStandardMaterial color="#ffffff" roughness={1} flatShading />
     </mesh>
     <mesh position={[0, 0.5, 0]}>
-      <sphereGeometry args={[1.2, 12, 12]} />
-      <meshStandardMaterial color="#ffffff" transparent opacity={opacity} roughness={1} flatShading />
+      <sphereGeometry args={[1.2, 8, 8]} />
+      <meshStandardMaterial color="#ffffff" roughness={1} flatShading />
     </mesh>
   </group>
 );
@@ -83,19 +84,19 @@ const FloatingIsland: React.FC<FloatingIslandProps> = ({ position, cls, onClick,
           onPointerOut={() => setHovered(null)}
         >
           {/* 섬 바닥 (흙) */}
-          <mesh position={[0, -1, 0]} castShadow receiveShadow>
+          <mesh position={[0, -1, 0]}>
             <cylinderGeometry args={[3.8, 1.5, 2, 8]} />
             <meshStandardMaterial color="#8B4513" roughness={0.9} flatShading />
           </mesh>
           
           {/* 섬 윗부분 (잔디) */}
-          <mesh position={[0, 0, 0]} castShadow receiveShadow>
+          <mesh position={[0, 0, 0]}>
             <cylinderGeometry args={[4.2, 3.8, 0.5, 8]} />
             <meshStandardMaterial color="#4CAF50" roughness={0.8} flatShading />
           </mesh>
           
           {/* 구름 장식 (최적화됨) */}
-          <SimpleCloud position={[0, -1.5, 0]} scale={1.5} opacity={0.6} />
+          <SimpleCloud position={[0, -1.5, 0]} scale={1.5} />
 
           {/* 나무 (레벨에 따른 크기) */}
           <group position={[0, 0.25, 0]} scale={treeScale}>
@@ -151,12 +152,40 @@ const WorldMap: React.FC = () => {
   const [targetIsland, setTargetIsland] = useState<THREE.Vector3 | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
 
-  // 모의 반 데이터
-  const classes = [
-    { id: 'class-1', name: '5학년 1반', treeLevel: 3, position: [0, 0, 10] as [number, number, number] },
-    { id: 'class-2', name: '5학년 2반', treeLevel: 2, position: [-35, 8, -25] as [number, number, number] },
+  // 모의 반 데이터 + 실제 레벨 반영을 위한 state
+  const [classes, setClasses] = useState([
+    { id: 'class-1', name: '5학년 1반', treeLevel: 1, position: [0, 0, 10] as [number, number, number] },
+    { id: 'class-2', name: '5학년 2반', treeLevel: 1, position: [-35, 8, -25] as [number, number, number] },
     { id: 'class-3', name: '관리자의 숲', treeLevel: 1, position: [35, -6, -20] as [number, number, number] },
-  ];
+  ]);
+
+  useEffect(() => {
+    const fetchLevels = async () => {
+      const { data } = await supabase.from('users').select('class_id, tree_exp');
+      if (data) {
+        setClasses(prev => prev.map(cls => {
+          let totalTreeExp = 0;
+          data.forEach(u => {
+            if (u.class_id === cls.id) {
+              totalTreeExp += (u.tree_exp || 0);
+            }
+          });
+          
+          let calcLevel = 1;
+          let expForNext = 10;
+          let currentExp = totalTreeExp;
+          while (currentExp >= expForNext) {
+            currentExp -= expForNext;
+            calcLevel++;
+            expForNext = calcLevel + 9;
+          }
+          
+          return { ...cls, treeLevel: calcLevel };
+        }));
+      }
+    };
+    fetchLevels();
+  }, []);
 
   // 커서 스타일 변경
   useEffect(() => {
@@ -181,21 +210,18 @@ const WorldMap: React.FC = () => {
   return (
     <div className="w-full h-screen relative bg-gradient-to-b from-sky-300 to-sky-100 overflow-hidden">
       
-      {/* 3D 캔버스 배경 */}
+      {/* 3D 캔버스 배경 (최적화 설정 적용) */}
       <Canvas 
-        shadows 
+        dpr={[0.5, 1]} 
+        performance={{ min: 0.5 }}
         camera={{ position: [0, 120, 30], fov: 45 }}
       >
         <Suspense fallback={<CanvasLoader />}>
-          <Environment preset="city" />
           
-          <ambientLight intensity={0.6} />
+          <ambientLight intensity={0.9} />
           <directionalLight 
             position={[10, 20, 10]} 
-            intensity={1.5} 
-            castShadow 
-            shadow-mapSize-width={1024} 
-            shadow-mapSize-height={1024} 
+            intensity={1.0} 
           />
 
           {classes.map((cls) => (
@@ -209,12 +235,7 @@ const WorldMap: React.FC = () => {
             />
           ))}
 
-          {/* 배경을 장식하는 대형 최적화 구름들 */}
-          <Float speed={1} floatIntensity={2}>
-            <SimpleCloud position={[-30, 15, -30]} scale={8} opacity={0.3} />
-            <SimpleCloud position={[30, 12, -15]} scale={10} opacity={0.3} />
-            <SimpleCloud position={[0, 18, 20]} scale={8} opacity={0.3} />
-          </Float>
+          {/* 대형 배경 구름 제거 (오버드로우 렉의 주원인) */}
 
           {/* 카메라 무빙 (트랜지션) */}
           <CameraRig targetIsland={targetIsland} onReached={handleAnimationComplete} />

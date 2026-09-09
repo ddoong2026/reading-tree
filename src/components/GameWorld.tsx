@@ -53,16 +53,16 @@ const CanvasLoader = () => {
 const GameWorld: React.FC = () => {
   const { classId } = useParams<{ classId: string }>();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, loading } = useAuth();
   const [characterTarget, setCharacterTarget] = useState<THREE.Vector3 | null>(null);
   const [controlMode, setControlMode] = useState<'click' | 'keyboard'>('click');
 
   React.useEffect(() => {
-    if (classId === 'class-3' && profile?.role !== 'admin' && profile?.role !== 'teacher') {
+    if (!loading && classId === 'class-3' && profile?.role !== 'admin' && profile?.role !== 'teacher') {
       alert("이 숲은 관리자만 들어갈 수 있습니다.");
       navigate('/map');
     }
-  }, [classId, profile, navigate]);
+  }, [classId, profile, loading, navigate]);
   
   const formatClassId = (cid: string | null | undefined) => {
     if (!cid) return '전체';

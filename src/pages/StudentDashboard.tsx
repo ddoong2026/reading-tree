@@ -51,6 +51,7 @@ const StudentDashboard: React.FC = () => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rouletteResult, setRouletteResult] = useState<any | null>(null);
   const [showQuestComplete, setShowQuestComplete] = useState(false);
+  const [hasCompletedToday, setHasCompletedToday] = useState(false);
 
   const isTeacherView = !!studentId && profile?.role === 'teacher';
   const targetUserId = isTeacherView ? studentId : user?.id;
@@ -282,13 +283,23 @@ const StudentDashboard: React.FC = () => {
   useEffect(() => {
     if (!targetUserId || loading) return;
     const savedQuest = localStorage.getItem(`quest_${targetUserId}`);
+    const lastQuestDate = localStorage.getItem(`quest_date_${targetUserId}`);
+    const today = new Date().toISOString().split('T')[0];
+
     if (savedQuest) {
       if (readCategories.has(savedQuest)) {
         localStorage.removeItem(`quest_${targetUserId}`);
         setQuestCategoryId(null);
         setShowQuestComplete(true);
+        if (lastQuestDate === today) {
+          setHasCompletedToday(true);
+        }
       } else {
         setQuestCategoryId(savedQuest);
+      }
+    } else {
+      if (lastQuestDate === today) {
+        setHasCompletedToday(true);
       }
     }
   }, [targetUserId, readCategories, loading]);
@@ -317,6 +328,7 @@ const StudentDashboard: React.FC = () => {
         setQuestCategoryId(finalCategory.id);
         if (targetUserId) {
           localStorage.setItem(`quest_${targetUserId}`, finalCategory.id);
+          localStorage.setItem(`quest_date_${targetUserId}`, new Date().toISOString().split('T')[0]);
         }
       }
     }, 100);
@@ -375,7 +387,7 @@ const StudentDashboard: React.FC = () => {
             <div>
               <h2 className="text-lg font-bold">퀘스트 완료!</h2>
               <p className="text-green-50 text-sm font-medium">
-                멋져요! 퀘스트로 받은 분야의 책을 다 읽었습니다. 새로운 퀘스트를 뽑아볼까요?
+                멋져요! 퀘스트로 받은 분야의 책을 다 읽었습니다. 내일 새로운 퀘스트를 다시 봅아볼까요?
               </p>
             </div>
           </div>
@@ -663,13 +675,19 @@ const StudentDashboard: React.FC = () => {
             </div>
             
             {!isTeacherView && !isFlower && !questCategoryId && (
-              <button 
-                onClick={handleSpinRoulette}
-                className="mt-6 w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-bold rounded-xl shadow-md transition-all flex justify-center items-center gap-2 group"
-              >
-                <span className="group-hover:rotate-180 transition-transform duration-500">🎲</span> 
-                오늘의 독서 퀘스트 뽑기
-              </button>
+              hasCompletedToday ? (
+                <div className="mt-6 w-full py-3 bg-gray-100 text-gray-500 font-bold rounded-xl text-center border border-gray-200 shadow-sm">
+                  👏 오늘의 퀘스트를 완료했습니다! 내일 다시 뽑아주세요.
+                </div>
+              ) : (
+                <button 
+                  onClick={handleSpinRoulette}
+                  className="mt-6 w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-bold rounded-xl shadow-md transition-all flex justify-center items-center gap-2 group"
+                >
+                  <span className="group-hover:rotate-180 transition-transform duration-500">🎲</span> 
+                  오늘의 독서 퀘스트 뽑기
+                </button>
+              )
             )}
           </div>
         </div>
