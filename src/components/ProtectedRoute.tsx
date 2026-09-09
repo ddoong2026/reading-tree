@@ -19,7 +19,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
+  if (allowedRoles && (!profile || !allowedRoles.includes(profile.role))) {
     // 역할이 안맞으면 메인으로 튕기기
     return <Navigate to="/" replace />;
   }

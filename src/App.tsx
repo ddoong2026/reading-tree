@@ -1,19 +1,20 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import MainPage from './pages/MainPage';
-import Login from './pages/Login';
-import StudentDashboard from './pages/StudentDashboard';
-import TeacherDashboard from './pages/TeacherDashboard';
-import WriteLog from './pages/WriteLog';
-import GameWorld from './components/GameWorld';
-import WorldMap from './pages/WorldMap';
+const MainPage = lazy(() => import('./pages/MainPage'));
+const Login = lazy(() => import('./pages/Login'));
+const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
+const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'));
+const WriteLog = lazy(() => import('./pages/WriteLog'));
+const GameWorld = lazy(() => import('./components/GameWorld'));
+const WorldMap = lazy(() => import('./pages/WorldMap'));
 
 const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-blue-50">로딩 중...</div>}>
         <Routes>
           <Route path="/" element={<MainPage />} />
           <Route path="/login" element={<Login />} />
@@ -46,6 +47,7 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
         </Routes>
+        </Suspense>
       </Router>
     </AuthProvider>
   );

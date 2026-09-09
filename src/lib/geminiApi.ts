@@ -1,5 +1,11 @@
 import { supabase } from './supabaseClient';
 
+const authHeaders = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('로그인이 필요합니다.');
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` };
+};
+
 export interface AIFeedbackResponse {
   feedbackText: string;
   success: boolean;
@@ -24,9 +30,7 @@ export const generateReadingFeedback = async (
 
     const response = await fetch('/api/gemini', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: await authHeaders(),
       body: JSON.stringify({
         action: 'generateFeedback',
         textContent,
@@ -66,9 +70,7 @@ export const extractTextFromImage = async (
   try {
     const response = await fetch('/api/gemini', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: await authHeaders(),
       body: JSON.stringify({
         action: 'extractText',
         base64Image,

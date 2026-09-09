@@ -33,7 +33,7 @@ const WriteLog: React.FC = () => {
   const [revisionHistory, setRevisionHistory] = useState<any[]>([]);
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editStartTime, setEditStartTime] = useState<number>(Date.now());
+  const [editStartTime, setEditStartTime] = useState<number>(() => Date.now());
   
   const { user, profile } = useAuth();
   const dashboardPath = (profile?.role === 'teacher' || profile?.role === 'admin') ? '/teacher' : '/student';

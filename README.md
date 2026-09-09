@@ -1,5 +1,11 @@
 # 독서오름나무 (Reading Climbing Tree) - 업데이트 내역
 
+## 배포 전 필수 설정
+
+1. Supabase SQL Editor에서 `supabase/20260909_security.sql`을 실행합니다.
+2. Vercel 환경 변수에 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `RULES_NATION_DIVIDEND_URL`, `READING_APP_WEBHOOK_SECRET`를 설정합니다.
+3. `SUPABASE_SERVICE_ROLE_KEY`는 서버 환경 변수로만 설정하며 `VITE_` 접두사를 붙이지 않습니다.
+
 ## 최근 수정 내역 (AI 에이전트 수정 사항)
 
 본 문서는 사용자의 요청 사항과 그에 따라 수정된 내역을 상세히 기록한 내용입니다. 향후 다른 AI 에이전트(Codex 등)가 교차 검증 및 컨텍스트 파악용으로 활용할 수 있도록 작성되었습니다.

@@ -53,7 +53,7 @@ const StudentDashboard: React.FC = () => {
   const [showQuestComplete, setShowQuestComplete] = useState(false);
   const [hasCompletedToday, setHasCompletedToday] = useState(false);
 
-  const isTeacherView = !!studentId && profile?.role === 'teacher';
+  const isTeacherView = !!studentId && ['teacher', 'admin'].includes(profile?.role ?? '');
   const targetUserId = isTeacherView ? studentId : user?.id;
 
   useEffect(() => {
@@ -163,42 +163,30 @@ const StudentDashboard: React.FC = () => {
     
     if (!window.confirm("1 포인트를 사용하여 식물 씨앗을 구매하시겠습니까?")) return;
 
-    const newPoints = userStats.points - 1;
-    const newSeedLevel = isFlower ? userStats.seed_level + 1 : userStats.seed_level;
-
-    const { data, error } = await supabase.from('users').update({ 
-      plant_growth: 1,
-      points: newPoints,
-      seed_level: newSeedLevel,
-      seed_bought_at: new Date().toISOString(),
-      used_water: 0,
-      used_sun: 0,
-      used_wind: 0,
-      plant_position_x: null,
-      plant_position_z: null
-    }).eq('id', targetUserId).select();
+    if (isTeacherView) return;
+    const { data, error } = await supabase.rpc('buy_seed');
 
     if (error) {
       alert(`DB 업데이트 오류 발생: ${error.message} (권한이 없거나 네트워크 오류입니다.)`);
       return;
     }
 
-    if (!data || data.length === 0) {
+    if (!data) {
       alert("⚠️ 데이터베이스에 적용되지 않았습니다! (Supabase RLS UPDATE 정책이 설정되어 있는지 확인해주세요.)");
       return;
     }
 
     setUserStats(prev => ({ 
       ...prev, 
-      points: newPoints, 
-      plant_growth: 1,
-      seed_level: newSeedLevel,
-      used_water: 0,
-      used_sun: 0,
-      used_wind: 0
+      points: data.points,
+      plant_growth: data.plant_growth,
+      seed_level: data.seed_level,
+      used_water: data.used_water,
+      used_sun: data.used_sun,
+      used_wind: data.used_wind
     }));
 
-    alert(`레벨 ${newSeedLevel} 씨앗을 구매했습니다! 숲으로 가서 심어주세요.`);
+    alert(`레벨 ${data.seed_level} 씨앗을 구매했습니다! 숲으로 가서 심어주세요.`);
   };
 
   const handleBuyItem = async (itemType: 'water' | 'sun' | 'wind') => {
@@ -210,18 +198,13 @@ const StudentDashboard: React.FC = () => {
     if (!window.confirm("1 포인트를 사용하여 이 아이템을 구매하시겠습니까?")) return;
 
     const dbColumn = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
-    const newPoints = userStats.points - 1;
-
-    setUserStats(prev => ({ 
-      ...prev, 
-      points: newPoints, 
-      [dbColumn]: prev[dbColumn] + 1 
-    }));
-
-    await supabase.from('users').update({ 
-      [dbColumn]: userStats[dbColumn] + 1,
-      points: newPoints
-    }).eq('id', targetUserId);
+    if (isTeacherView) return;
+    const { data, error } = await supabase.rpc('buy_item', { p_item: itemType });
+    if (error || !data) {
+      alert(`구매에 실패했습니다: ${error?.message ?? '알 수 없는 오류'}`);
+      return;
+    }
+    setUserStats(prev => ({ ...prev, points: data.points, [dbColumn]: data[dbColumn] }));
   };
 
 

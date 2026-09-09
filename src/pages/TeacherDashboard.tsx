@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase, supabaseAdmin } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { Trash2 } from 'lucide-react';
 
 interface Student {
@@ -67,6 +67,19 @@ const TeacherDashboard: React.FC = () => {
 
   // 모달 상태
   const [viewLog, setViewLog] = useState<ReadingLog | null>(null);
+
+  const callAdmin = async (body: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || '관리 작업에 실패했습니다.');
+    }
+  };
 
   // 필터 상태
   const [filterType, setFilterType] = useState<string>('all');
@@ -235,41 +248,7 @@ const TeacherDashboard: React.FC = () => {
       setBatchLogs([...newLogs]);
 
       try {
-        const { data: authData, error: authError } = await supabaseAdmin.auth.signUp({
-          email,
-          password: batchPassword,
-        });
-
-        let userId = authData?.user?.id;
-
-        // 이미 Auth에 가입되어 있으나 public.users에서만 삭제된 경우 복구 시도
-        if (authError && authError.message.includes('User already registered')) {
-          const { data: loginData } = await supabaseAdmin.auth.signInWithPassword({
-            email,
-            password: batchPassword,
-          });
-          
-          if (loginData?.user) {
-            userId = loginData.user.id;
-          } else {
-            throw new Error('이미 존재하는 아이디입니다. (완전히 삭제하려면 Supabase 대시보드의 Authentication -> Users에서 삭제해야 합니다)');
-          }
-        } else if (authError || !userId) {
-          throw new Error(authError?.message || "Auth 계정 생성 실패");
-        }
-
-        // upsert를 사용하여 이미 있더라도 덮어쓰거나 복구함
-        const { error: dbError } = await supabase.from('users').upsert({
-          id: userId,
-          role: 'student',
-          name: name,
-          student_number: parseInt(id, 10),
-          class_id: `${schoolYear}-${g}-${c}` // 학년도-학년-반 형식으로 기본 반 저장
-        });
-
-        if (dbError) {
-          throw new Error(dbError.message);
-        }
+        await callAdmin({ action: 'createStudent', email, password: batchPassword, name, studentNumber: parseInt(id, 10), classId: `${schoolYear}-${g}-${c}` });
 
         newLogs[newLogs.length - 1] = `✅ 성공: [${id}] 계정이 생성(또는 복구)되었습니다.`;
       } catch (error: any) {
@@ -363,63 +342,45 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const handleUpdateStudentClass = async (studentId: string, newClassId: string) => {
-    // RLS 정책 때문에 선생님 계정으로 학생의 users 테이블을 업데이트하려면 supabaseAdmin(서비스 롤)을 사용해야 합니다.
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .update({ class_id: newClassId })
-      .eq('id', studentId)
-      .select();
-
-    if (error) {
-      alert('반 설정 변경 중 오류가 발생했습니다: ' + error.message);
-    } else if (data && data.length === 0) {
-      alert('업데이트 권한이 없습니다.');
-    } else {
+    // 권한 있는 서버 API가 서비스 역할로 변경한다.
+    try {
+      await callAdmin({ action: 'updateStudent', studentId, classId: newClassId });
       // update local state
       setStudents(students.map(s => s.id === studentId ? { ...s, class_id: newClassId } : s));
       alert('반이 정상적으로 변경되었습니다.');
+    } catch (error: any) {
+      alert('반 설정 변경 중 오류가 발생했습니다: ' + error.message);
     }
   };
 
   const handleUpdateStudentGroup = async (studentId: string, groupCode: string) => {
-    const { error } = await supabase.from('users').update({ group_code: groupCode.trim() || null }).eq('id', studentId);
-    if (error) return alert('모둠 저장에 실패했습니다: ' + error.message);
-    setStudents(students.map(s => s.id === studentId ? { ...s, group_code: groupCode.trim() || null } : s));
+    try {
+      await callAdmin({ action: 'updateStudent', studentId, groupCode: groupCode.trim() || null });
+      setStudents(students.map(s => s.id === studentId ? { ...s, group_code: groupCode.trim() || null } : s));
+    } catch (error: any) {
+      alert('모둠 저장에 실패했습니다: ' + error.message);
+    }
   };
 
   const handleUpdatePlantStats = async (studentId: string, column: string, value: number) => {
     if (isNaN(value)) return;
-    const { error } = await supabaseAdmin
-      .from('users')
-      .update({ [column]: value })
-      .eq('id', studentId);
-
-    if (error) {
-      alert(`업데이트 실패: ${error.message}`);
-    } else {
+    try {
+      await callAdmin({ action: 'updateStudent', studentId, ...(column === 'seed_level' ? { seedLevel: value } : { treeExp: value }) });
       setStudents(students.map(s => s.id === studentId ? { ...s, [column]: value } : s));
+    } catch (error: any) {
+      alert(`업데이트 실패: ${error.message}`);
     }
   };
 
   const handleDeletePlant = async (studentId: string, name: string) => {
     if (!window.confirm(`[${name}] 학생의 식물을 정말 삭제하시겠습니까?\n(씨앗 레벨 1, 경험치 0, 심기 상태 초기화)`)) return;
     
-    const { error } = await supabaseAdmin.from('users').update({ 
-      plant_growth: 0,
-      seed_level: 1,
-      tree_exp: 0,
-      used_water: 0,
-      used_sun: 0,
-      used_wind: 0,
-      plant_position_x: null,
-      plant_position_z: null
-    }).eq('id', studentId);
-    
-    if (error) {
-      alert(`삭제 실패: ${error.message}`);
-    } else {
+    try {
+      await callAdmin({ action: 'resetPlant', studentId });
       setStudents(students.map(s => s.id === studentId ? { ...s, plant_growth: 0, seed_level: 1, tree_exp: 0 } : s));
       alert('식물이 성공적으로 삭제되었습니다.');
+    } catch (error: any) {
+      alert(`삭제 실패: ${error.message}`);
     }
   };
 
@@ -459,7 +420,7 @@ const TeacherDashboard: React.FC = () => {
     try {
       const response = await fetch('/api/gemini', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}` },
         body: JSON.stringify({ action: 'checkModels' }),
       });
       

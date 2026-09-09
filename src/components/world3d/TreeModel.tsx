@@ -114,8 +114,9 @@ export const TreeModel: React.FC<TreeModelProps> = ({ position = [0, 0, 0], scal
   const [animState, setAnimState] = useState<'idle' | 'jiggle' | 'pop'>('idle');
   const [showEffect, setShowEffect] = useState(false);
   
-  const targetScale = useRef(getTargetScale(level));
-  const startScale = useRef(targetScale.current);
+  const initialScale = getTargetScale(level);
+  const targetScale = useRef(initialScale);
+  const startScale = useRef(initialScale);
   const prevLevel = useRef(level || 3);
   const animTimer = useRef(0);
 

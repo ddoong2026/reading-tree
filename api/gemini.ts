@@ -1,10 +1,13 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { getServiceClient, requireUser } from './auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
+  const actor = await requireUser(req);
+  if (!actor) return res.status(401).json({ error: 'Authentication is required.' });
 
   // Vercel 환경에서는 VITE_ 접두사 없는 GEMINI_API_KEY를 Secret으로 사용합니다.
   const API_KEY = process.env.GEMINI_API_KEY;
@@ -19,6 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { action, textContent, hasImage, base64Image, mimeType } = req.body;
+    if (JSON.stringify(req.body || {}).length > 6_000_000) return res.status(413).json({ error: 'Request is too large.' });
     
     const genAI = new GoogleGenerativeAI(API_KEY);
     const fallbackModels = ["gemini-3.6-flash"];
@@ -61,7 +65,10 @@ JSON 구조 예시:
 }
 `;
 
-      const template = (req.body.customPrompt || defaultPrompt) + systemConstraint;
+      // 학생 요청의 customPrompt는 신뢰하지 않는다. 저장된 교사 설정만 서버에서 읽는다.
+      const { data: setting } = await getServiceClient().from('app_settings').select('value').eq('id', 'ai_prompt').maybeSingle();
+      const teacherPrompt = typeof setting?.value === 'string' && setting.value.trim() ? setting.value : defaultPrompt;
+      const template = teacherPrompt + systemConstraint;
       let prompt = template + `\n\n[학생의 독서록 내용]\n"${textContent}"`;
       
       if (hasImage) {
@@ -160,6 +167,7 @@ JSON 구조 예시:
       throw lastError;
     
     } else if (action === 'checkModels') {
+      if (actor.role !== 'admin') return res.status(403).json({ error: 'Administrator access is required.' });
       try {
         // 백엔드에서 직접 모델 목록을 조회하여 API 키 정상 여부 확인
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);

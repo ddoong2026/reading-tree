@@ -113,7 +113,6 @@ const GameWorld: React.FC = () => {
       return;
     }
 
-    const column = `item_${itemType}` as 'item_water' | 'item_sun' | 'item_wind';
     const usedColumn = `used_${itemType}` as 'used_water' | 'used_sun' | 'used_wind';
     const newGrowth = myInventory.plantGrowth + 1;
     const newCount = currentCount - 1;
@@ -139,29 +138,17 @@ const GameWorld: React.FC = () => {
       setActiveEffects(prev => prev.filter(e => e.id !== effectId));
     }, 3000);
 
-    // RPC를 쓰거나 단일 쿼리로 처리하기 애매하므로 프론트에서 먼저 현재 used 값을 읽거나,
-    // 가장 안전한 방법은 RLS 정책에 막히지 않도록 기존 데이터를 기반으로 +1 하여 보냅니다.
-    // 기존 meData를 가져왔을 때 used 값을 어딘가에 저장해야 합니다.
-    const { data: meData } = await supabase.from('users').select(`${usedColumn}, tree_exp`).eq('id', profile.id).single();
-    const currentUsed = meData ? (meData as any)[usedColumn] || 0 : 0;
-    const currentTreeExp = meData ? (meData as any).tree_exp || 0 : 0;
-
-    const { error } = await supabase.from('users').update({
-      [column]: newCount,
-      plant_growth: newGrowth,
-      [usedColumn]: currentUsed + 1,
-      tree_exp: currentTreeExp + 1
-    }).eq('id', profile.id);
+    const { data: updatedUser, error } = await supabase.rpc('use_plant_item', { p_item: itemType });
 
     if (error) {
       alert("아이템 사용 중 오류가 발생했습니다: " + error.message);
-    } else if (profile.student_number && profile.group_code) {
+    } else if (profile.student_number && profile.group_code && updatedUser) {
       const { data: { session } } = await supabase.auth.getSession();
       fetch('/api/dividend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({
-          tree_exp: currentTreeExp + 1
+          tree_exp: updatedUser.tree_exp
         })
       }).catch(() => undefined);
     }
@@ -313,13 +300,9 @@ const GameWorld: React.FC = () => {
     e.stopPropagation();
     if (!plantPreviewPos || !profile?.id) return;
     
-    const { data, error } = await supabase.from('users').update({
-      plant_position_x: plantPreviewPos.x,
-      plant_position_z: plantPreviewPos.z,
-      class_id: classId || null
-    }).eq('id', profile.id).select();
+    const { data, error } = await supabase.rpc('plant_seed', { p_x: plantPreviewPos.x, p_z: plantPreviewPos.z, p_class_id: classId || null });
 
-    if (error || !data || data.length === 0) {
+    if (error || !data) {
       alert("⚠️ 씨앗 심기에 실패했습니다! (DB 권한 부족: Supabase UPDATE 정책을 확인하세요)");
       setIsPlantingMode(false);
       setPlantPreviewPos(null);
@@ -351,11 +334,16 @@ const GameWorld: React.FC = () => {
   const grassData = React.useMemo(() => {
     const data: { position: [number, number, number], scaleY: number }[] = [];
     for (let i = 0; i < 50; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 5 + Math.random() * 35;
+      // Deterministic decoration: it stays stable across renders and SSR.
+      const unit = (seed: number) => {
+        const value = Math.sin(seed * 12.9898) * 43758.5453;
+        return value - Math.floor(value);
+      };
+      const angle = unit(i * 3 + 1) * Math.PI * 2;
+      const radius = 5 + unit(i * 3 + 2) * 35;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      const scaleY = 0.5 + Math.random() * 1.5;
+      const scaleY = 0.5 + unit(i * 3 + 3) * 1.5;
       
       data.push({ position: [x, scaleY / 2, z], scaleY });
     }
