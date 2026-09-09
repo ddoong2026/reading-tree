@@ -11,6 +11,9 @@ interface Student {
   plant_growth?: number;
   seed_level?: number;
   tree_exp?: number;
+  used_water?: number;
+  used_sun?: number;
+  used_wind?: number;
   student_number?: number | null;
   group_code?: string | null;
   role?: string;
@@ -128,7 +131,7 @@ const TeacherDashboard: React.FC = () => {
     // 1. 사용자 목록 가져오기 (학생, 교사, 관리자 포함)
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, name, student_number, group_code, created_at, class_id, plant_growth, seed_level, tree_exp, role')
+      .select('id, name, student_number, group_code, created_at, class_id, plant_growth, seed_level, tree_exp, used_water, used_sun, used_wind, role')
       .order('name', { ascending: true });
 
     if (userError) console.error("Error fetching students:", userError);
@@ -775,7 +778,14 @@ const TeacherDashboard: React.FC = () => {
                       {student.role !== 'student' && <span className="ml-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">{student.role === 'admin' ? '관리자' : '교사'}</span>}
                     </td>
                     <td className="py-3 px-4 text-sm font-medium">
-                      {(student.plant_growth ?? 0) >= 10 ? '🌻 꽃' : (student.plant_growth ?? 0) >= 5 ? '🌿 새싹' : (student.plant_growth ?? 0) >= 1 ? '🌱 씨앗' : '❌ 없음'}
+                      {(() => {
+                        const level = student.seed_level ?? 1;
+                        const flower = (student.used_water ?? 0) >= level && (student.used_sun ?? 0) >= level && (student.used_wind ?? 0) >= level;
+                        if (flower) return '🌻 꽃';
+                        if ((student.plant_growth ?? 0) >= 1 + level * 2) return '🌿 성장 중';
+                        if ((student.plant_growth ?? 0) >= 1) return '🌱 씨앗';
+                        return '❌ 없음';
+                      })()}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">

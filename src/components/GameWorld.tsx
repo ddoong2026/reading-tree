@@ -317,13 +317,15 @@ const GameWorld: React.FC = () => {
 
   const handleDeletePlant = async (studentId: string) => {
     if (!window.confirm("이 식물을 삭제하시겠습니까?")) return;
-    const { error } = await supabase.from('users').update({
-      plant_position_x: null,
-      plant_position_z: null,
-      plant_growth: 0
-    }).eq('id', studentId);
-    if (error) {
-      alert("식물 삭제 중 오류가 발생했습니다.");
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ action: 'resetPlant', studentId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      alert(`식물 삭제 중 오류가 발생했습니다: ${data.error ?? '알 수 없는 오류'}`);
     } else {
       setStudentsPlants(prev => prev.filter(p => p.id !== studentId));
       setSelectedStudentId(null);

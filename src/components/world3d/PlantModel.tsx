@@ -32,27 +32,25 @@ export const PlantModel: React.FC<PlantModelProps> = ({
     }
   });
 
-  // Stage 0: Seed (growth 0)
-  // Stage 1: Sprout (growth 1-3)
-  // Stage 2: Stem with leaves (growth 4-6)
-  // Stage 3: Bud (growth 7-8)
-  // Stage 4: Flower (usedWater >= 3 && usedSun >= 3 && usedWind >= 3, or isFlower fallback)
+  // A seed blooms after using each item `seedLevel` times.
   
   let stage = 0;
-  const isItemFlower = usedWater >= 3 && usedSun >= 3 && usedWind >= 3;
+  const requiredUses = Math.max(1, seedLevel);
+  const isItemFlower = usedWater >= requiredUses && usedSun >= requiredUses && usedWind >= requiredUses;
+  const totalRequiredGrowth = 1 + requiredUses * 3;
 
   if (isItemFlower || isFlower) {
     stage = 4;
-  } else if (growth >= 7) {
+  } else if (growth >= 1 + requiredUses * 2) {
     stage = 3;
-  } else if (growth >= 4) {
+  } else if (growth >= 1 + requiredUses) {
     stage = 2;
   } else if (growth >= 1) {
     stage = 1;
   }
 
   // 부드러운 성장을 위한 스케일 계산 (최소 0.6에서 1.2까지)
-  const baseScale = (stage === 4 ? 1.2 : 0.6 + (growth / 9.0) * 0.6) * (1 + (seedLevel - 1) * 0.2);
+  const baseScale = (stage === 4 ? 1.2 : 0.6 + (Math.min(growth, totalRequiredGrowth) / totalRequiredGrowth) * 0.6) * (1 + (seedLevel - 1) * 0.2);
 
   // 시드 레벨별 색상 지정
   const petalColors = ["#f472b6", "#c084fc", "#60a5fa", "#34d399", "#fbbf24", "#f87171"];

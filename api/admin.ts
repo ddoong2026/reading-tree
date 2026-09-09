@@ -35,8 +35,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (action === 'resetPlant') {
       const { studentId } = req.body;
-      const { error } = await admin.from('users').update({ plant_growth: 0, seed_level: 1, tree_exp: 0, used_water: 0, used_sun: 0, used_wind: 0, plant_position_x: null, plant_position_z: null }).eq('id', studentId).eq('role', 'student');
+      if (typeof studentId !== 'string') return res.status(400).json({ error: 'Invalid user id.' });
+      const { data: target, error: targetError } = await admin.from('users').select('id, role').eq('id', studentId).maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return res.status(404).json({ error: 'User not found.' });
+      // Teachers may reset students and their own plant; only admins may reset another staff member.
+      if (target.role !== 'student' && target.id !== actor.user.id && actor.role !== 'admin') return res.status(403).json({ error: 'You cannot reset this user.' });
+      const { data, error } = await admin.from('users').update({ plant_growth: 0, seed_level: 1, tree_exp: 0, used_water: 0, used_sun: 0, used_wind: 0, plant_position_x: null, plant_position_z: null }).eq('id', studentId).select('id').maybeSingle();
       if (error) throw error;
+      if (!data) return res.status(404).json({ error: 'User not found.' });
       return res.status(204).end();
     }
     return res.status(400).json({ error: 'Unknown action.' });
