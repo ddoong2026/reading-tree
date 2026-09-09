@@ -173,7 +173,9 @@ const StudentDashboard: React.FC = () => {
       seed_bought_at: new Date().toISOString(),
       used_water: 0,
       used_sun: 0,
-      used_wind: 0
+      used_wind: 0,
+      plant_position_x: null,
+      plant_position_z: null
     }).eq('id', targetUserId).select();
 
     if (error) {
