@@ -152,10 +152,10 @@ const WorldMap: React.FC = () => {
   const [targetIsland, setTargetIsland] = useState<THREE.Vector3 | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
 
-  // 모의 반 데이터 + 실제 레벨 반영을 위한 state
+  // users.class_id에 저장되는 실제 반 ID와 반드시 일치해야 한다.
   const [classes, setClasses] = useState([
-    { id: 'class-1', name: '5학년 1반', treeLevel: 1, position: [0, 0, 10] as [number, number, number] },
-    { id: 'class-2', name: '5학년 2반', treeLevel: 1, position: [-35, 8, -25] as [number, number, number] },
+    { id: '2026-5-1', name: '5학년 1반', treeLevel: 1, position: [0, 0, 10] as [number, number, number] },
+    { id: '2026-5-2', name: '5학년 2반', treeLevel: 1, position: [-35, 8, -25] as [number, number, number] },
     { id: 'class-3', name: '관리자의 숲', treeLevel: 1, position: [35, -6, -20] as [number, number, number] },
   ]);
 
