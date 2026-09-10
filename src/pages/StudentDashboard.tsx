@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Trash2, ShoppingBag, Info } from 'lucide-react';
 import { KDC_CATEGORIES } from '../lib/kdc';
+import { ANIMALS, type AnimalId } from '../lib/animals';
 
 interface ReadingLog {
   id: string;
@@ -40,6 +41,7 @@ const StudentDashboard: React.FC = () => {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null, seed_level: 1, used_water: 0, used_sun: 0, used_wind: 0, rabbit_count: 0 });
+  const [ownedAnimals, setOwnedAnimals] = useState<AnimalId[]>([]);
 
   // 건의사항 관련 상태
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -103,6 +105,11 @@ const StudentDashboard: React.FC = () => {
 
     loadData();
   }, [targetUserId, isTeacherView]);
+
+  useEffect(() => {
+    if (!targetUserId) return;
+    supabase.from('user_animals').select('animal_type').eq('user_id', targetUserId).then(({ data }) => setOwnedAnimals((data || []).map((animal) => animal.animal_type as AnimalId)));
+  }, [targetUserId]);
 
   const handleDelete = async (id: string, title: string) => {
     if (!window.confirm(`'${title}' 독서록을 정말 삭제하시겠습니까?`)) return;
@@ -206,21 +213,18 @@ const StudentDashboard: React.FC = () => {
     setUserStats(prev => ({ ...prev, points: data.points, [dbColumn]: data[dbColumn] }));
   };
 
-  const handleBuyRabbit = async () => {
-    if (userStats.points < 3) {
-      alert('토끼 친구를 맞이하려면 3포인트가 필요해요.');
-      return;
-    }
-    if (!window.confirm('3 포인트로 숲 토끼 친구를 맞이하시겠습니까?')) return;
+  const handleBuyAnimal = async (animal: typeof ANIMALS[number]) => {
+    if (userStats.points < animal.price) { alert(`${animal.name} 친구를 맞이하려면 ${animal.price}포인트가 필요해요.`); return; }
+    if (!window.confirm(`${animal.price} 포인트로 ${animal.name} 친구를 맞이하시겠습니까?`)) return;
     if (isTeacherView) return;
-
-    const { data, error } = await supabase.rpc('buy_rabbit_companion');
+    const { data, error } = await supabase.rpc('buy_ecosystem_animal', { p_animal: animal.id });
     if (error || !data) {
-      alert(`토끼 친구 구매에 실패했습니다: ${error?.message ?? '알 수 없는 오류'}`);
+      alert(`${animal.name} 친구 구매에 실패했습니다: ${error?.message ?? '알 수 없는 오류'}`);
       return;
     }
-    setUserStats(prev => ({ ...prev, points: data.points, rabbit_count: data.rabbit_count }));
-    alert('토끼 친구가 숲에 왔어요! 식물이 있는 숲에서 만나보세요.');
+    setUserStats(prev => ({ ...prev, points: data.points }));
+    setOwnedAnimals(prev => [...prev, animal.id]);
+    alert(`${animal.name} 친구가 숲에 왔어요!`);
   };
 
 
@@ -579,16 +583,18 @@ const StudentDashboard: React.FC = () => {
                 </div>
                 <span className="text-xs font-bold text-gray-700">바람 쐬기</span>
               </button>
-              <button
-                onClick={handleBuyRabbit}
-                disabled={isTeacherView}
-                className="flex flex-col items-center p-2 rounded-xl shadow-sm border bg-white hover:bg-lime-50 border-lime-200 transition-colors disabled:bg-gray-100 disabled:opacity-50"
-              >
-                <div className="w-10 h-10 bg-lime-100 rounded-full flex items-center justify-center mb-1 overflow-hidden">
-                  <img src="/animals/rabbit-companion.png" alt="토끼 친구" className="w-full h-full object-contain" />
-                </div>
-                <span className="text-xs font-bold text-gray-700">토끼 친구 · 3P</span>
-              </button>
+              {ANIMALS.filter((animal) => !animal.prey || ownedAnimals.includes(animal.prey)).map((animal) => {
+                const isOwned = ownedAnimals.includes(animal.id);
+                return <button
+                  key={animal.id}
+                  onClick={() => handleBuyAnimal(animal)}
+                  disabled={isTeacherView || isOwned}
+                  className="flex flex-col items-center p-2 rounded-xl shadow-sm border bg-white hover:bg-lime-50 border-lime-200 transition-colors disabled:bg-gray-100 disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 bg-lime-100 rounded-full flex items-center justify-center mb-1 text-2xl">{animal.emoji}</div>
+                  <span className="text-xs font-bold text-gray-700">{isOwned ? `${animal.name} 보유` : `${animal.name} · ${animal.price}P`}</span>
+                </button>;
+              })}
             </div>
           </div>
 

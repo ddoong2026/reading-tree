@@ -10,6 +10,8 @@ import { CharacterModel } from './world3d/CharacterModel';
 import { PlantModel } from './world3d/PlantModel';
 import { ItemEffectModel } from './world3d/ItemEffectModel';
 import { RabbitModel } from './world3d/RabbitModel';
+import { AnimalModel } from './world3d/AnimalModel';
+import type { AnimalId } from '../lib/animals';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 
@@ -84,7 +86,7 @@ const GameWorld: React.FC = () => {
   const [treeNextExp, setTreeNextExp] = useState(10);
 
   const [studentsPlants, setStudentsPlants] = useState<{ id: string, ownerId: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number], seedBoughtAt?: string | null, seedLevel: number }[]>([]);
-  const [forestRabbits, setForestRabbits] = useState<{ id: string; position: [number, number, number] }[]>([]);
+  const [forestAnimals, setForestAnimals] = useState<{ id: string; type: AnimalId; position: [number, number, number] }[]>([]);
 
   // 심기 모드 관련 상태
   const [isPlantingMode, setIsPlantingMode] = useState(false);
@@ -320,12 +322,11 @@ const GameWorld: React.FC = () => {
           seedLevel: plant.seed_level,
         }));
         setStudentsPlants([...plants, ...archivedFlowers]);
-        setForestRabbits(plants.flatMap((plant) => {
-          const owner = activeUsers.find((user) => user.id === plant.ownerId);
-          return Array.from({ length: owner?.rabbit_count || 0 }, (_, index) => ({
-            id: `${plant.ownerId}-rabbit-${index}`,
-            position: [plant.position[0] + 1 + index * 0.65, 0, plant.position[2] + 0.7] as [number, number, number],
-          }));
+        const { data: animalData } = await supabase.from('user_animals').select('id, user_id, animal_type');
+        setForestAnimals((animalData || []).flatMap((animal, index) => {
+          const plant = plants.find((entry) => entry.ownerId === animal.user_id);
+          if (!plant) return [];
+          return [{ id: animal.id, type: animal.animal_type as AnimalId, position: [plant.position[0] - 1 - (index % 2) * 0.5, 0, plant.position[2] + 0.6] as [number, number, number] }];
         }));
       }
     };
@@ -475,7 +476,9 @@ const GameWorld: React.FC = () => {
               )}
             </group>
           ))}
-          {forestRabbits.map((rabbit) => <RabbitModel key={rabbit.id} position={rabbit.position} />)}
+          {forestAnimals.map((animal) => animal.type === 'rabbit'
+            ? <RabbitModel key={animal.id} position={animal.position} />
+            : <AnimalModel key={animal.id} type={animal.type} position={animal.position} />)}
           
           {/* 애니메이션 렌더링 */}
           {activeEffects.map(effect => (
