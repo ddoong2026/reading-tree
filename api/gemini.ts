@@ -61,8 +61,13 @@ JSON 구조 예시:
   "summary_feedback": {
     "strength": "가장 잘한 점...",
     "priority_improvements": ["보완할 점 1", "보완할 점 2"]
-  }
+  },
+  "annotations": [
+    {"original": "학생 글에서 그대로 찾을 수 있는 짧은 문장 또는 구절", "suggestion": "이렇게 고쳐 써 보세요", "reason": "고치면 좋아지는 이유"}
+  ]
 }
+
+annotations는 꼭 필요한 수정만 최대 5개 작성하세요. original은 학생 글에 있는 문자열과 글자까지 정확히 같아야 하며, 찾을 수 없으면 annotations에 넣지 마세요.
 `;
 
       // 학생 요청의 customPrompt는 신뢰하지 않는다. 저장된 교사 설정만 서버에서 읽는다.
@@ -124,7 +129,17 @@ JSON 구조 예시:
             const totalScore = typeof parsed.total_score === 'number' ? parsed.total_score : parseInt(parsed.total_score) || 0;
             feedback += `\n[SCORE: ${totalScore}]`;
             
-            return res.status(200).json({ feedbackText: feedback.trim(), success: true });
+            const annotations = Array.isArray(parsed.annotations)
+              ? parsed.annotations
+                .filter((item: any) => typeof item?.original === 'string' && item.original.length > 0 && textContent.includes(item.original))
+                .slice(0, 5)
+                .map((item: any) => ({
+                  original: item.original,
+                  suggestion: typeof item.suggestion === 'string' ? item.suggestion : '',
+                  reason: typeof item.reason === 'string' ? item.reason : '',
+                }))
+              : [];
+            return res.status(200).json({ feedbackText: feedback.trim(), feedbackAnnotations: annotations, success: true });
           } catch(e) {
              // JSON 파싱 실패 시, 원본 텍스트를 그대로 반환 (에러 방지용)
              // 원본 텍스트 안에 [SCORE: X]가 없을 수 있으므로 0점으로 처리

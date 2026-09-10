@@ -8,6 +8,7 @@ const authHeaders = async () => {
 
 export interface AIFeedbackResponse {
   feedbackText: string;
+  feedbackAnnotations?: { original: string; suggestion: string; reason: string }[];
   success: boolean;
 }
 

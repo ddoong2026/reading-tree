@@ -13,6 +13,7 @@ create policy "Authenticated users can view completed flowers" on public.user_pl
 
 alter table public.users add column if not exists rabbit_count integer not null default 0;
 alter table public.users add column if not exists animal_coins integer not null default 0;
+alter table public.reading_logs add column if not exists feedback_annotations jsonb not null default '[]'::jsonb;
 
 create table if not exists public.user_animals (
   id uuid primary key default gen_random_uuid(), user_id uuid not null references public.users(id) on delete cascade,

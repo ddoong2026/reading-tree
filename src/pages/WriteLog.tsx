@@ -6,6 +6,31 @@ import { supabase } from '../lib/supabaseClient';
 import { generateReadingFeedback, extractTextFromImage } from '../lib/geminiApi';
 import { KDC_CATEGORIES } from '../lib/kdc';
 
+type FeedbackAnnotation = { original: string; suggestion: string; reason: string };
+
+const HighlightedFeedback = ({ text, annotations }: { text: string; annotations: FeedbackAnnotation[] }) => {
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  annotations.forEach((annotation, index) => {
+    const start = text.indexOf(annotation.original, cursor);
+    if (start < 0) return;
+    if (start > cursor) parts.push(text.slice(cursor, start));
+    parts.push(
+      <span key={`mark-${index}`} className="relative inline bg-yellow-200/90 rounded px-0.5 mx-0.5 decoration-2 underline decoration-amber-400">
+        {annotation.original}
+        <span className="absolute left-0 top-full z-10 mt-2 w-64 rounded-xl bg-amber-50 p-3 text-left text-xs leading-relaxed text-amber-950 shadow-lg ring-1 ring-amber-200">
+          <strong className="block text-amber-700">→ 이렇게 고쳐보세요</strong>
+          <span className="block font-semibold">{annotation.suggestion || '선생님의 보완할 점을 참고해 고쳐 보세요.'}</span>
+          {annotation.reason && <span className="mt-1 block text-amber-800">{annotation.reason}</span>}
+        </span>
+      </span>
+    );
+    cursor = start + annotation.original.length;
+  });
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts}</>;
+};
+
 const WriteLog: React.FC = () => {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit_id');
@@ -17,6 +42,8 @@ const WriteLog: React.FC = () => {
   const [hasCheckedQuest, setHasCheckedQuest] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackAnnotations, setFeedbackAnnotations] = useState<FeedbackAnnotation[]>([]);
+  const [feedbackFormat, setFeedbackFormat] = useState<'standard' | 'highlight'>('standard');
   
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -112,13 +139,15 @@ const WriteLog: React.FC = () => {
       const fetchLog = async () => {
         const { data } = await supabase
           .from('reading_logs')
-          .select('book_title, category, text_content, image_url, ai_feedback, attempts, edit_days, daily_attempts, last_edit_date, revision_history')
+          .select('book_title, category, text_content, image_url, ai_feedback, feedback_annotations, attempts, edit_days, daily_attempts, last_edit_date, revision_history')
           .eq('id', editId)
           .single();
         if (data) {
           setBookTitle(data.book_title);
           setCategory(data.category);
           setText(data.text_content || '');
+          setFeedback(data.ai_feedback || null);
+          setFeedbackAnnotations(Array.isArray(data.feedback_annotations) ? data.feedback_annotations : []);
           if (data.edit_days) setEditDays(data.edit_days);
           if (data.daily_attempts) setDailyAttempts(data.daily_attempts);
           if (data.last_edit_date) setLastEditDate(data.last_edit_date);
@@ -280,6 +309,7 @@ const WriteLog: React.FC = () => {
       // 3. AI 피드백 요청 (현재 텍스트상자의 최종 텍스트 기반)
       const aiResult = await generateReadingFeedback(text, !!uploadedImageUrl);
       const aiResponse = aiResult.feedbackText;
+      const annotations = aiResult.feedbackAnnotations || [];
 
       if (!aiResult.success) {
         setIsSubmitting(false);
@@ -310,6 +340,7 @@ const WriteLog: React.FC = () => {
           score: score,
           text_content: text,
           feedback: cleanAiResponse,
+          feedback_annotations: annotations,
           timestamp: new Date().toISOString()
         };
         const updatedHistory = [...revisionHistory, newHistoryItem];
@@ -320,6 +351,7 @@ const WriteLog: React.FC = () => {
           text_content: text,
           image_url: uploadedImageUrl,
           ai_feedback: cleanAiResponse,
+          feedback_annotations: annotations,
           attempts: currentAttempts + 1,
           final_score: score,
           score_improvement: scoreImprovement,
@@ -343,6 +375,7 @@ const WriteLog: React.FC = () => {
           score: score,
           text_content: text,
           feedback: cleanAiResponse,
+          feedback_annotations: annotations,
           timestamp: new Date().toISOString()
         };
 
@@ -353,6 +386,7 @@ const WriteLog: React.FC = () => {
           text_content: text,
           image_url: uploadedImageUrl,
           ai_feedback: cleanAiResponse,
+          feedback_annotations: annotations,
           attempts: 1,
           initial_score: score,
           final_score: score,
@@ -394,6 +428,8 @@ const WriteLog: React.FC = () => {
         ? "\n\n🎉 통과! 1 포인트를 얻었습니다!" 
         : `\n\n⚠️ 아쉽게도 통과 기준에 미치지 못했어요. (오늘 남은 기회: ${3 - insertedData.daily_attempts}번)\n대시보드에서 '다시 도전하기'를 눌러 수정해보세요!`;
       
+      setFeedbackAnnotations(annotations);
+      setFeedbackFormat('standard');
       setFeedback(cleanAiResponse + "\n" + resultMessage);
     } catch (error: any) {
       alert('오류가 발생했습니다: ' + error.message);
@@ -741,9 +777,38 @@ const WriteLog: React.FC = () => {
               </button>
             </div>
             
-            <p className="text-gray-800 leading-relaxed bg-white/60 p-4 rounded-xl">
-              {feedback}
-            </p>
+            <div className="mb-3 flex gap-2 rounded-xl bg-white/60 p-1.5">
+              <button
+                onClick={() => setFeedbackFormat('standard')}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${feedbackFormat === 'standard' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white'}`}
+              >
+                1. 기존 형식
+              </button>
+              <button
+                onClick={() => setFeedbackFormat('highlight')}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${feedbackFormat === 'highlight' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-600 hover:bg-white'}`}
+              >
+                2. 형광펜 첨삭
+              </button>
+            </div>
+
+            {feedbackFormat === 'standard' || feedbackAnnotations.length === 0 ? (
+              <p className="whitespace-pre-wrap text-gray-800 leading-relaxed bg-white/60 p-4 rounded-xl">
+                {feedback}
+              </p>
+            ) : (
+              <div className="space-y-4 rounded-xl bg-white/60 p-4">
+                <p className="text-sm font-bold text-amber-800">노란색 부분에 마우스를 올리면 수정 방법을 볼 수 있어요.</p>
+                <div className="whitespace-pre-wrap leading-relaxed text-gray-800">
+                  <HighlightedFeedback text={text} annotations={feedbackAnnotations} />
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {feedbackAnnotations.map((annotation, index) => (
+                    <p key={`${annotation.original}-${index}`} className="mb-2 last:mb-0"><mark className="rounded bg-yellow-200 px-1">{annotation.original}</mark> → <strong>{annotation.suggestion}</strong>{annotation.reason ? ` (${annotation.reason})` : ''}</p>
+                  ))}
+                </div>
+              </div>
+            )}
             
             <div className="mt-4 flex gap-3 justify-end">
               <button 
