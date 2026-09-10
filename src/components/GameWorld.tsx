@@ -325,12 +325,11 @@ const GameWorld: React.FC = () => {
         setStudentsPlants(allVisiblePlants);
         const { data: animalData, error: animalError } = await supabase.from('user_animals').select('id, user_id, animal_type');
         if (animalError) console.error('동물 친구를 불러오지 못했습니다.', animalError);
-        setForestAnimals((animalData || []).flatMap((animal, index) => {
-          // 새 씨앗을 아직 심지 않았어도, 이전에 완성해 보관된 꽃 곁에서는
-          // 동물 친구가 계속 보이도록 현재 식물과 보관 꽃을 모두 찾는다.
-          const plant = allVisiblePlants.find((entry) => entry.ownerId === animal.user_id);
-          if (!plant) return [];
-          return [{ id: animal.id, type: animal.animal_type as AnimalId, position: [plant.position[0] - 1 - (index % 2) * 0.5, 0, plant.position[2] + 0.6] as [number, number, number] }];
+        setForestAnimals((animalData || []).flatMap((animal) => {
+          const hash = [...animal.id].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 0);
+          const x = ((hash % 1000) / 1000) * 70 - 35;
+          const z = (((hash >> 10) % 1000) / 1000) * 70 - 35;
+          return [{ id: animal.id, type: animal.animal_type as AnimalId, position: [x, 0, z] as [number, number, number] }];
         }));
       }
     };
