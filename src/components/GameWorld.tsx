@@ -329,8 +329,10 @@ const GameWorld: React.FC = () => {
         if (animalError) console.error('동물 친구를 불러오지 못했습니다.', animalError);
         setForestAnimals((animalData || []).flatMap((animal) => {
           const hash = [...animal.id].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 0);
-          const x = ((hash % 1000) / 1000) * 70 - 35;
-          const z = (((hash >> 10) % 1000) / 1000) * 70 - 35;
+          // 부호 없는 시프트를 사용해야 음수 좌표가 맵 밖으로 튀지 않는다.
+          // 매의 최대 이동 반경(11)을 고려해 시작점도 여유 있게 제한한다.
+          const x = ((hash % 1000) / 1000) * 56 - 28;
+          const z = (((hash >>> 10) % 1000) / 1000) * 56 - 28;
           return [{ id: animal.id, type: animal.animal_type as AnimalId, position: [x, 0, z] as [number, number, number] }];
         }));
       }
