@@ -105,6 +105,17 @@ language sql security definer set search_path=public as $$
   group by u.class_id;
 $$;
 
+-- 다른 반 동물이 섞이지 않도록 현재 숲 반의 동물만 전달한다.
+create or replace function public.get_class_animals(p_class_id text default null)
+returns table (id uuid, user_id uuid, animal_type text)
+language sql security definer set search_path=public as $$
+  select a.id, a.user_id, a.animal_type
+  from public.user_animals a
+  join public.users u on u.id = a.user_id
+  where auth.uid() is not null
+    and (p_class_id is null or u.class_id = p_class_id);
+$$;
+
 -- 같은 반 친구의 식물을 눌렀을 때만 독서록을 읽는다. 일반 reading_logs 조회 권한은 유지한다.
 create or replace function public.get_forest_reading_logs(
   p_owner_id uuid,
@@ -138,5 +149,7 @@ revoke all on function public.get_forest_plant_states(text) from public;
 grant execute on function public.get_forest_plant_states(text) to authenticated;
 revoke all on function public.get_class_tree_stats() from public;
 grant execute on function public.get_class_tree_stats() to authenticated;
+revoke all on function public.get_class_animals(text) from public;
+grant execute on function public.get_class_animals(text) to authenticated;
 revoke all on function public.get_forest_reading_logs(uuid,timestamptz,timestamptz) from public;
 grant execute on function public.get_forest_reading_logs(uuid,timestamptz,timestamptz) to authenticated;
