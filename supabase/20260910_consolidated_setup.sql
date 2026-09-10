@@ -74,5 +74,25 @@ begin
   update public.users set points=points+1,animal_coins=animal_coins+1 where id=auth.uid(); return true;
 end $$;
 
+-- 다른 학생의 개인정보를 노출하지 않고, 숲 렌더링에 필요한 값만 전달한다.
+create or replace function public.get_forest_plant_states(p_class_id text default null)
+returns table (
+  id uuid, name text, plant_growth integer, class_id text,
+  plant_position_x real, plant_position_z real,
+  used_water integer, used_sun integer, used_wind integer,
+  seed_level integer, seed_bought_at timestamptz, tree_exp integer
+)
+language sql security definer set search_path=public as $$
+  select u.id, u.name, u.plant_growth, u.class_id,
+    u.plant_position_x, u.plant_position_z,
+    u.used_water, u.used_sun, u.used_wind,
+    u.seed_level, u.seed_bought_at, coalesce(u.tree_exp, 0)
+  from public.users u
+  where auth.uid() is not null
+    and (p_class_id is null or u.class_id = p_class_id);
+$$;
+
 revoke all on function public.buy_item(text),public.buy_seed(),public.use_plant_item(text),public.plant_seed(real,real,text),public.buy_ecosystem_animal(text),public.reward_completed_quest(text) from public;
 grant execute on function public.buy_item(text),public.buy_seed(),public.use_plant_item(text),public.plant_seed(real,real,text),public.buy_ecosystem_animal(text),public.reward_completed_quest(text) to authenticated;
+revoke all on function public.get_forest_plant_states(text) from public;
+grant execute on function public.get_forest_plant_states(text) to authenticated;

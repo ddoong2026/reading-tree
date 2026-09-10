@@ -35,6 +35,21 @@ const SimpleCloud = ({ position, scale = 1 }: { position: [number, number, numbe
 
 const MAP_EDGE = 47;
 
+type ForestPlantState = {
+  id: string;
+  name: string;
+  plant_growth: number;
+  class_id: string | null;
+  plant_position_x: number | null;
+  plant_position_z: number | null;
+  used_water: number;
+  used_sun: number;
+  used_wind: number;
+  seed_level: number;
+  seed_bought_at: string | null;
+  tree_exp: number;
+};
+
 // --- 로딩 화면 컴포넌트 ---
 const CanvasLoader = () => {
   const { progress } = useProgress();
@@ -210,11 +225,13 @@ const GameWorld: React.FC = () => {
 
   React.useEffect(() => {
     const fetchPlants = async () => {
-      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp');
-      if (classId) {
-        userQuery = userQuery.eq('class_id', classId);
-      }
-      let { data: usersData } = await userQuery;
+      // 학생은 다른 학생의 개인정보가 담긴 users 행을 직접 읽을 수 없다.
+      // 지도용으로 필요한 식물 상태만 반환하는 RPC를 사용한다.
+      const { data: forestData, error: forestError } = await supabase.rpc('get_forest_plant_states', {
+        p_class_id: classId || null,
+      });
+      if (forestError) console.error('숲 식물 정보를 불러오지 못했습니다.', forestError);
+      let usersData: ForestPlantState[] = (forestData || []) as ForestPlantState[];
 
       if (profile?.id) {
         const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp').eq('id', profile.id).single();
@@ -233,7 +250,6 @@ const GameWorld: React.FC = () => {
             seedLevel: meData.seed_level || 1,
           });
 
-          if (!usersData) usersData = [];
           const existingIndex = usersData.findIndex(u => u.id === meData.id);
           if (meData.class_id === classId || !classId) {
             if (existingIndex !== -1) {
