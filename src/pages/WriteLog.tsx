@@ -370,11 +370,11 @@ const WriteLog: React.FC = () => {
 
       if (aiResult.success && score >= 70) {
         try {
-          const { data: userData } = await supabase.from('users').select('points').eq('id', user.id).single();
+          const { data: userData } = await supabase.from('users').select('points, animal_coins').eq('id', user.id).single();
           const currentPoints = userData?.points || 0;
           
           const { data: updateData, error: updateError } = await supabase.from('users')
-            .update({ points: currentPoints + 1 })
+            .update({ points: currentPoints + 1, animal_coins: (userData?.animal_coins || 0) + 1 })
             .eq('id', user.id)
             .select();
 

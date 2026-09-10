@@ -9,7 +9,7 @@ const styles: Record<Exclude<AnimalId, 'rabbit'>, { color: string; scale: number
 };
 export const AnimalModel: React.FC<{ type: Exclude<AnimalId, 'rabbit'>; position: [number, number, number] }> = ({ type, position }) => {
   const ref = useRef<THREE.Group>(null); const style = styles[type];
-  useFrame((state) => { if (ref.current) { const p = state.clock.elapsedTime * 2 + position[0]; ref.current.position.y = position[1] + Math.max(0, Math.sin(p)) * 0.16; ref.current.rotation.y = Math.sin(p * .35) * .5; } });
+  useFrame((state) => { if (ref.current) { const p = state.clock.elapsedTime * .32 + position[0] * .7 + position[2] * .3; ref.current.position.x = position[0] + Math.sin(p) * 22; ref.current.position.z = position[2] + Math.sin(p * .73 + 1.4) * 22; ref.current.position.y = position[1] + .3 + Math.max(0, Math.sin(p * 5)) * .22; ref.current.rotation.y = -p; } });
   return <group ref={ref} position={position} scale={style.scale}>
     <mesh castShadow><sphereGeometry args={[1, 8, 6]} /><meshStandardMaterial color={style.color} flatShading /></mesh>
     <mesh position={[0, .72, .35]} scale={[.7,.7,.7]}><sphereGeometry args={[.7,8,6]} /><meshStandardMaterial color={style.color} flatShading /></mesh>

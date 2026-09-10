@@ -29,6 +29,7 @@ interface UserStats {
   used_sun: number;
   used_wind: number;
   rabbit_count: number;
+  animal_coins: number;
 }
 
 const StudentDashboard: React.FC = () => {
@@ -40,7 +41,7 @@ const StudentDashboard: React.FC = () => {
   const [studentName, setStudentName] = useState<string>('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null, seed_level: 1, used_water: 0, used_sun: 0, used_wind: 0, rabbit_count: 0 });
+  const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null, seed_level: 1, used_water: 0, used_sun: 0, used_wind: 0, rabbit_count: 0, animal_coins: 0 });
   const [ownedAnimals, setOwnedAnimals] = useState<AnimalId[]>([]);
 
   // 건의사항 관련 상태
@@ -72,7 +73,7 @@ const StudentDashboard: React.FC = () => {
           .order('created_at', { ascending: false }),
         supabase
           .from('users')
-          .select('name, points, item_water, item_sun, item_wind, plant_growth, class_id, seed_level, used_water, used_sun, used_wind, rabbit_count')
+          .select('name, points, animal_coins, item_water, item_sun, item_wind, plant_growth, class_id, seed_level, used_water, used_sun, used_wind, rabbit_count')
           .eq('id', targetUserId)
           .single()
       ]);
@@ -98,6 +99,7 @@ const StudentDashboard: React.FC = () => {
           used_sun: d.used_sun || 0,
           used_wind: d.used_wind || 0,
           rabbit_count: d.rabbit_count || 0
+          , animal_coins: d.animal_coins || 0
         }));
       }
       setLoading(false);
@@ -214,7 +216,7 @@ const StudentDashboard: React.FC = () => {
   };
 
   const handleBuyAnimal = async (animal: typeof ANIMALS[number]) => {
-    if (userStats.points < animal.price) { alert(`${animal.name} 친구를 맞이하려면 ${animal.price}포인트가 필요해요.`); return; }
+    if (userStats.animal_coins < animal.price) { alert(`${animal.name} 친구를 맞이하려면 동물 코인 ${animal.price}개가 필요해요.`); return; }
     if (!window.confirm(`${animal.price} 포인트로 ${animal.name} 친구를 맞이하시겠습니까?`)) return;
     if (isTeacherView) return;
     const { data, error } = await supabase.rpc('buy_ecosystem_animal', { p_animal: animal.id });
@@ -222,7 +224,7 @@ const StudentDashboard: React.FC = () => {
       alert(`${animal.name} 친구 구매에 실패했습니다: ${error?.message ?? '알 수 없는 오류'}`);
       return;
     }
-    setUserStats(prev => ({ ...prev, points: data.points }));
+    setUserStats(prev => ({ ...prev, animal_coins: data.animal_coins }));
     setOwnedAnimals(prev => [...prev, animal.id]);
     alert(`${animal.name} 친구가 숲에 왔어요!`);
   };
@@ -536,7 +538,7 @@ const StudentDashboard: React.FC = () => {
                   </button>
                 )}
                 <div className="bg-white px-3 py-1 rounded-full font-bold text-amber-600 shadow-sm border border-amber-200">
-                  💰 {userStats.points} P
+                  🌱 {userStats.points} · 🐾 {userStats.animal_coins}
                 </div>
               </div>
             </div>
