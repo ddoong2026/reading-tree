@@ -210,14 +210,14 @@ const GameWorld: React.FC = () => {
 
   React.useEffect(() => {
     const fetchPlants = async () => {
-      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp, rabbit_count');
+      let userQuery = supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp');
       if (classId) {
         userQuery = userQuery.eq('class_id', classId);
       }
       let { data: usersData } = await userQuery;
 
       if (profile?.id) {
-        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp, rabbit_count').eq('id', profile.id).single();
+        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp').eq('id', profile.id).single();
         if (meData) {
           // meData를 가져오자마자 무조건 내 인벤토리를 업데이트!
           setMyInventory({ 

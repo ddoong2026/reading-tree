@@ -79,7 +79,16 @@ JSON 구조 예시:
       for (const modelName of fallbackModels) {
         try {
           const model = genAI.getGenerativeModel({ model: modelName });
-          const result = await model.generateContent(prompt);
+          let result;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try { result = await model.generateContent(prompt); break; }
+            catch (error: any) {
+              const message = String(error?.message || error);
+              if (attempt === 2 || !/(429|quota|rate|503|overloaded)/i.test(message)) throw error;
+              await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+            }
+          }
+          if (!result) throw new Error('Gemini feedback request failed after retries');
           const response = await result.response;
           const text = response.text();
           
@@ -156,7 +165,16 @@ JSON 구조 예시:
       for (const modelName of fallbackModels) {
         try {
           const model = genAI.getGenerativeModel({ model: modelName });
-          const result = await model.generateContent([prompt, imagePart]);
+          let result;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try { result = await model.generateContent([prompt, imagePart]); break; }
+            catch (error: any) {
+              const message = String(error?.message || error);
+              if (attempt === 2 || !/(429|quota|rate|503|overloaded)/i.test(message)) throw error;
+              await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+            }
+          }
+          if (!result) throw new Error('Gemini OCR request failed after retries');
           const response = await result.response;
           return res.status(200).json({ text: response.text().trim() });
         } catch (error: any) {

@@ -308,6 +308,8 @@ const WriteLog: React.FC = () => {
           attempt: nextDailyAttempts,
           edit_time: editDuration,
           score: score,
+          text_content: text,
+          feedback: cleanAiResponse,
           timestamp: new Date().toISOString()
         };
         const updatedHistory = [...revisionHistory, newHistoryItem];
@@ -339,6 +341,8 @@ const WriteLog: React.FC = () => {
           attempt: 1,
           edit_time: 0,
           score: score,
+          text_content: text,
+          feedback: cleanAiResponse,
           timestamp: new Date().toISOString()
         };
 
@@ -370,21 +374,9 @@ const WriteLog: React.FC = () => {
 
       if (aiResult.success && score >= 70) {
         try {
-          const { data: userData } = await supabase.from('users').select('points, animal_coins').eq('id', user.id).single();
-          const currentPoints = userData?.points || 0;
-          
-          const { data: updateData, error: updateError } = await supabase.from('users')
-            .update({ points: currentPoints + 1, animal_coins: (userData?.animal_coins || 0) + 1 })
-            .eq('id', user.id)
-            .select();
-
-          if (updateError || !updateData || updateData.length === 0) {
-            console.error("포인트 업데이트 DB 거부됨(RLS 정책 확인 필요):", updateError);
-            alert("⚠️ 포인트 지급 실패! 데이터베이스(Supabase) 보안 정책(RLS) 때문에 점수가 저장되지 않았습니다. 관리자에게 'users 테이블의 UPDATE 정책' 추가를 요청하세요.");
-            earnedPoint = false;
-          } else {
-            earnedPoint = true;
-          }
+          const { data: rewarded, error: rewardError } = await supabase.rpc('reward_completed_quest', { p_category: category });
+          if (rewardError) throw rewardError;
+          earnedPoint = rewarded === true;
         } catch (e) {
           console.error("포인트 업데이트 에러 발생:", e);
         }

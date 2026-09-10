@@ -15,6 +15,8 @@ interface ReadingLog {
   ai_feedback: string | null;
   image_url: string | null;
   attempts?: number;
+  final_score?: number | null;
+  revision_history?: { day: number; attempt: number; score: number; text_content?: string; feedback?: string; timestamp: string }[];
 }
 
 interface UserStats {
@@ -68,7 +70,7 @@ const StudentDashboard: React.FC = () => {
       const [logsResponse, statsResponse] = await Promise.all([
         supabase
           .from('reading_logs')
-          .select('id, book_title, category, created_at, text_content, ai_feedback, image_url, attempts')
+          .select('id, book_title, category, created_at, text_content, ai_feedback, image_url, attempts, final_score, revision_history')
           .eq('user_id', targetUserId)
           .order('created_at', { ascending: false }),
         supabase
@@ -254,11 +256,7 @@ const StudentDashboard: React.FC = () => {
   };
 
   const passedLogs = React.useMemo(() => {
-    return logs.filter(log => {
-      const match = log.ai_feedback?.match(/\[SCORE:\s*(\d+)\]/);
-      const score = match ? parseInt(match[1]) : 0;
-      return score >= 70;
-    });
+    return logs.filter(log => (log.final_score ?? parseInt(log.ai_feedback?.match(/\[SCORE:\s*(\d+)\]/)?.[1] || '0', 10)) >= 70);
   }, [logs]);
 
   const readCategories = React.useMemo(() => new Set(passedLogs.map(log => log.category || '000')), [passedLogs]);
@@ -485,7 +483,9 @@ const StudentDashboard: React.FC = () => {
                           <>
                             <div className="bg-purple-50 p-4 rounded-lg mt-4 border border-purple-100">
                               <h4 className="text-sm font-bold text-purple-800 mb-2">선생님의 조언 ✨</h4>
-                              <p className="text-purple-700 text-sm whitespace-pre-wrap leading-relaxed">{cleanFeedback}</p>
+                              <div className="text-purple-700 text-sm leading-relaxed space-y-1">
+                                {cleanFeedback.split('\n').filter(Boolean).map((line, index) => <p key={index}>{line.replace(/\*\*/g, '')}</p>)}
+                              </div>
                             </div>
                             {canRetry && !isTeacherView && (
                               <div className="mt-4 flex justify-end">
@@ -497,6 +497,17 @@ const StudentDashboard: React.FC = () => {
                           </>
                         );
                       })()}
+                      {!!log.revision_history?.length && (
+                        <details className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                          <summary className="cursor-pointer text-sm font-bold text-gray-700">수정 과정 보기 ({log.revision_history.length}개)</summary>
+                          <div className="mt-3 space-y-3">
+                            {log.revision_history.map((revision, index) => <div key={index} className="rounded-md bg-white p-3 text-sm">
+                              <p className="font-bold text-green-700">{revision.day}일차 {revision.attempt}차 제출 · {revision.score}점</p>
+                              <p className="mt-1 whitespace-pre-wrap text-gray-700">{revision.text_content || '이전 기록에는 글 전문이 저장되지 않았습니다.'}</p>
+                            </div>)}
+                          </div>
+                        </details>
+                      )}
                       {!log.text_content && !log.image_url && !log.ai_feedback && (
                         <div className="text-gray-400 text-sm italic">내용이 없습니다.</div>
                       )}
