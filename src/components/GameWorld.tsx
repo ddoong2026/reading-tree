@@ -347,7 +347,27 @@ const GameWorld: React.FC = () => {
           seedLevel: plant.seed_level,
         }));
         const allVisiblePlants = [...plants, ...archivedFlowers];
-        setStudentsPlants(allVisiblePlants);
+        // 씨앗 1은 기록의 시작(하한 없음)부터, 다음 씨앗부터는 직전 꽃 완성
+        // 시각부터 시작한다. 씨앗 구매 시각은 기록 구간을 자르는 기준이 아니다.
+        const plantsByOwner = new Map<string, typeof allVisiblePlants>();
+        allVisiblePlants.forEach((plant) => {
+          const ownerPlants = plantsByOwner.get(plant.ownerId) || [];
+          ownerPlants.push(plant);
+          plantsByOwner.set(plant.ownerId, ownerPlants);
+        });
+        const rangedPlants = [...plantsByOwner.values()].flatMap((ownerPlants) => {
+          const orderedPlants = [...ownerPlants].sort((a, b) => {
+            const aTime = a.seedEndedAt || a.seedBoughtAt || '';
+            const bTime = b.seedEndedAt || b.seedBoughtAt || '';
+            return aTime.localeCompare(bTime);
+          });
+          return orderedPlants.map((plant, index) => ({
+            ...plant,
+            // 첫 씨앗은 0부터, 두 번째 씨앗부터는 직전 꽃이 완성된 뒤부터다.
+            seedBoughtAt: index === 0 ? null : (orderedPlants[index - 1].seedEndedAt || null),
+          }));
+        });
+        setStudentsPlants(rangedPlants);
         const { data: animalData, error: animalError } = await supabase.from('user_animals').select('id, user_id, animal_type');
         if (animalError) console.error('동물 친구를 불러오지 못했습니다.', animalError);
         setForestAnimals((animalData || []).flatMap((animal) => {
