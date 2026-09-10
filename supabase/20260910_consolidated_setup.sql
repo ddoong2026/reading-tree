@@ -95,6 +95,16 @@ language sql security definer set search_path=public as $$
     and (p_class_id is null or u.class_id = p_class_id);
 $$;
 
+-- 월드맵에는 개인 EXP가 아닌 반별 누적 EXP만 제공한다.
+create or replace function public.get_class_tree_stats()
+returns table (class_id text, total_tree_exp bigint)
+language sql security definer set search_path=public as $$
+  select u.class_id, coalesce(sum(u.tree_exp), 0)::bigint
+  from public.users u
+  where auth.uid() is not null and u.class_id is not null
+  group by u.class_id;
+$$;
+
 -- 같은 반 친구의 식물을 눌렀을 때만 독서록을 읽는다. 일반 reading_logs 조회 권한은 유지한다.
 create or replace function public.get_forest_reading_logs(
   p_owner_id uuid,
@@ -126,5 +136,7 @@ revoke all on function public.buy_item(text),public.buy_seed(),public.use_plant_
 grant execute on function public.buy_item(text),public.buy_seed(),public.use_plant_item(text),public.plant_seed(real,real,text),public.buy_ecosystem_animal(text),public.reward_completed_quest(text) to authenticated;
 revoke all on function public.get_forest_plant_states(text) from public;
 grant execute on function public.get_forest_plant_states(text) to authenticated;
+revoke all on function public.get_class_tree_stats() from public;
+grant execute on function public.get_class_tree_stats() to authenticated;
 revoke all on function public.get_forest_reading_logs(uuid,timestamptz,timestamptz) from public;
 grant execute on function public.get_forest_reading_logs(uuid,timestamptz,timestamptz) to authenticated;

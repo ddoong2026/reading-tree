@@ -161,15 +161,11 @@ const WorldMap: React.FC = () => {
 
   useEffect(() => {
     const fetchLevels = async () => {
-      const { data } = await supabase.from('users').select('class_id, tree_exp');
+      // 학생 개인 EXP는 공개하지 않고, 반별 누적 EXP만 가져온다.
+      const { data } = await supabase.rpc('get_class_tree_stats');
       if (data) {
         setClasses(prev => prev.map(cls => {
-          let totalTreeExp = 0;
-          data.forEach(u => {
-            if (u.class_id === cls.id) {
-              totalTreeExp += (u.tree_exp || 0);
-            }
-          });
+          const totalTreeExp = Number(data.find((row: any) => row.class_id === cls.id)?.total_tree_exp || 0);
           
           let calcLevel = 1;
           let expForNext = 10;
