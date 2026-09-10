@@ -33,6 +33,8 @@ const SimpleCloud = ({ position, scale = 1 }: { position: [number, number, numbe
   </group>
 );
 
+const MAP_EDGE = 47;
+
 // --- 로딩 화면 컴포넌트 ---
 const CanvasLoader = () => {
   const { progress } = useProgress();
@@ -343,7 +345,7 @@ const GameWorld: React.FC = () => {
       setPlantPreviewPos(pt);
       
       const distToTree = Math.sqrt(pt.x * pt.x + pt.z * pt.z);
-      let isValid = distToTree >= 3.0; // 나무 반경 3.0 이내 불가
+      let isValid = distToTree >= 3.0 && Math.abs(pt.x) <= MAP_EDGE && Math.abs(pt.z) <= MAP_EDGE;
       
       if (isValid) {
         for (const p of studentsPlants) {
@@ -498,7 +500,7 @@ const GameWorld: React.FC = () => {
                   <div className="flex flex-col items-center gap-2">
                     {!plantPreviewValid ? (
                       <span className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm font-bold shadow whitespace-nowrap">
-                        여기에 심을 수 없습니다 (너무 가깝습니다)
+                        여기에 심을 수 없습니다 (맵 밖이거나 너무 가깝습니다)
                       </span>
                     ) : (
                       <button 

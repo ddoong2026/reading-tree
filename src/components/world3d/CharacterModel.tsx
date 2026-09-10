@@ -20,6 +20,7 @@ export const CharacterModel: React.FC<CharacterModelProps> = ({ targetPosition, 
   const yVel = useRef(0);
   
   const speed = 4.0;
+  const mapEdge = 47;
   const keyboard = useKeyboard();
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export const CharacterModel: React.FC<CharacterModelProps> = ({ targetPosition, 
 
       if (attemptMove) {
         const distToCenter = Math.sqrt(nextPos.x * nextPos.x + nextPos.z * nextPos.z);
-        if (distToCenter >= 2.5) {
+        if (distToCenter >= 2.5 && Math.abs(nextPos.x) <= mapEdge && Math.abs(nextPos.z) <= mapEdge) {
           if (keyboard.forward) group.current.translateZ(currentSpeed * delta);
           if (keyboard.backward) group.current.translateZ(-currentSpeed * delta);
           moving = true;
@@ -149,7 +150,7 @@ export const CharacterModel: React.FC<CharacterModelProps> = ({ targetPosition, 
         const nextPos = currentPos.clone().add(direction.clone().multiplyScalar(speed * delta));
         const distToCenter = Math.sqrt(nextPos.x * nextPos.x + nextPos.z * nextPos.z);
         
-        if (distToCenter >= 2.5) {
+        if (distToCenter >= 2.5 && Math.abs(nextPos.x) <= mapEdge && Math.abs(nextPos.z) <= mapEdge) {
           group.current.position.copy(nextPos);
         } else {
           // 충돌
