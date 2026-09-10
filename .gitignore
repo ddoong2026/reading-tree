@@ -42,3 +42,4 @@ dist-ssr
 *.sw?
 .env
 GEMINI.md
+.env.local
