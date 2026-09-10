@@ -4,6 +4,7 @@ import { Sphere, Cylinder, Box } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface PlantModelProps {
+  plantId?: string;
   position?: [number, number, number];
   growth: number;
   usedWater?: number;
@@ -13,22 +14,22 @@ interface PlantModelProps {
   seedLevel?: number;
 }
 
-// 꽃잎 색은 씨앗 레벨이 아니라, 꽃에 사용한 아이템의 비율로 결정한다.
-// 물은 파랑, 햇빛은 노랑, 바람은 보라 계열이며 여러 아이템을 사용하면
-// 각 색을 사용 횟수만큼 섞어 자연스럽게 중간색을 만든다.
-const getPetalColor = (usedWater: number, usedSun: number, usedWind: number, seedLevel: number) => {
+const getRandomPetalColor = (plantId: string) => {
+  const petalColors = ['#f472b6', '#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#fb7185', '#a3e635'];
+  const hash = [...plantId].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 0);
+  return petalColors[hash % petalColors.length];
+};
+
+// 아이템 조합은 줄기 색으로만 보여 준다. 물·햇빛·바람 색을 실제 사용
+// 횟수 비율로 섞으므로, 어느 하나가 우세하더라도 나머지 사용량도 반영된다.
+const getStemColor = (usedWater: number, usedSun: number, usedWind: number) => {
   const uses = [usedWater, usedSun, usedWind].map((count) => Math.max(0, count));
   const totalUses = uses.reduce((total, count) => total + count, 0);
-  const careColors = ['#38bdf8', '#fbbf24', '#a78bfa'];
+  if (totalUses === 0) return '#4ade80';
 
-  // 기존 데이터처럼 사용 이력이 없는 꽃도 이전의 씨앗 색을 유지한다.
-  if (totalUses === 0) {
-    const seedColors = ['#f472b6', '#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171'];
-    return seedColors[(seedLevel - 1) % seedColors.length];
-  }
-
+  const itemColors = ['#38bdf8', '#fbbf24', '#a78bfa'];
   const mixedColor = uses.reduce((color, count, index) => {
-    const itemColor = new THREE.Color(careColors[index]);
+    const itemColor = new THREE.Color(itemColors[index]);
     color.r += itemColor.r * count;
     color.g += itemColor.g * count;
     color.b += itemColor.b * count;
@@ -40,6 +41,7 @@ const getPetalColor = (usedWater: number, usedSun: number, usedWind: number, see
 };
 
 export const PlantModel: React.FC<PlantModelProps> = ({ 
+  plantId = 'plant',
   position = [0, 0, 0], 
   growth, 
   usedWater = 0,
@@ -78,7 +80,8 @@ export const PlantModel: React.FC<PlantModelProps> = ({
   // 부드러운 성장을 위한 스케일 계산 (최소 0.6에서 1.2까지)
   const baseScale = (stage === 4 ? 1.2 : 0.6 + (Math.min(growth, totalRequiredGrowth) / totalRequiredGrowth) * 0.6) * (1 + (seedLevel - 1) * 0.2);
 
-  const petalColor = getPetalColor(usedWater, usedSun, usedWind, seedLevel);
+  const petalColor = getRandomPetalColor(plantId);
+  const stemColor = getStemColor(usedWater, usedSun, usedWind);
 
   return (
     <group position={position} ref={groupRef} scale={[baseScale, baseScale, baseScale]}>
@@ -99,7 +102,7 @@ export const PlantModel: React.FC<PlantModelProps> = ({
         <>
           {/* Main Stem */}
           <Cylinder args={[0.05, 0.05, stage === 1 ? 0.5 : stage === 2 ? 1 : 1.5]} position={[0, stage === 1 ? 0.25 : stage === 2 ? 0.5 : 0.75, 0]}>
-            <meshStandardMaterial color="#4ade80" />
+            <meshStandardMaterial color={stemColor} />
           </Cylinder>
           
           {/* Leaves */}

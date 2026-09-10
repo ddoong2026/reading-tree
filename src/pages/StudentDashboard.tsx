@@ -342,7 +342,12 @@ const StudentDashboard: React.FC = () => {
             >
               💌 개발자/선생님께 건의하기
             </button>
-            <Link to="/world" className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold shadow-sm hover:bg-green-600 transition-colors">🌳 숲으로 돌아가기</Link>
+            <Link
+              to={userStats.class_id ? `/world/${userStats.class_id}` : (profile?.role !== 'student' ? '/world/class-3' : '/map')}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold shadow-sm hover:bg-green-600 transition-colors"
+            >
+              🌳 숲으로 돌아가기
+            </Link>
             <Link to="/" className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold shadow-sm hover:bg-blue-200 transition-colors">🏠 홈으로 돌아가기</Link>
           </div>
         )}

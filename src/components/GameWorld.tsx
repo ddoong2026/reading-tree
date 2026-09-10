@@ -298,10 +298,14 @@ const GameWorld: React.FC = () => {
           };
         }).filter(Boolean) as typeof studentsPlants;
 
-        const { data: archivedData } = await supabase
+        let archivedQuery = supabase
           .from('user_plants')
-          .select('id, user_id, owner_name, seed_level, plant_growth, used_water, used_sun, used_wind, plant_position_x, plant_position_z, seed_bought_at')
-          .eq('class_id', classId || '');
+          .select('id, user_id, owner_name, seed_level, plant_growth, used_water, used_sun, used_wind, plant_position_x, plant_position_z, seed_bought_at');
+        // /world처럼 학급이 없는 공용 경로에서는 전체 꽃을 조회한다.
+        // 이전에는 빈 문자열로 필터링해 보관된 꽃이 전부 누락됐다.
+        if (classId) archivedQuery = archivedQuery.eq('class_id', classId);
+        const { data: archivedData, error: archivedError } = await archivedQuery;
+        if (archivedError) console.error('보관된 꽃을 불러오지 못했습니다.', archivedError);
         const archivedFlowers = (archivedData || []).map(plant => ({
           id: plant.id,
           ownerId: plant.user_id,
@@ -454,6 +458,7 @@ const GameWorld: React.FC = () => {
               }}
             >
               <PlantModel 
+                plantId={plant.id}
                 growth={plant.growth} 
                 isFlower={plant.isFlower} 
                 usedWater={plant.usedWater}

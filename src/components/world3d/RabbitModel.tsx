@@ -10,8 +10,16 @@ export const RabbitModel: React.FC<{ position: [number, number, number] }> = ({ 
 
   useFrame((state) => {
     if (!groupRef.current) return;
-    groupRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 2.5) * 0.035;
-    groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.8) * 0.18;
+    // 각 토끼가 식물 주변의 작은 타원 궤도를 따라 폴짝폴짝 이동한다.
+    // 위치로부터 위상을 정해 같은 자리에 있는 토끼들도 동시에 움직이지 않는다.
+    const phase = state.clock.elapsedTime * 2.8 + position[0] * 1.7 + position[2] * 0.9;
+    const pathPhase = phase * 0.42;
+    const hop = Math.max(0, Math.sin(phase));
+    groupRef.current.position.x = position[0] + Math.cos(pathPhase) * 0.38;
+    groupRef.current.position.z = position[2] + Math.sin(pathPhase) * 0.28;
+    groupRef.current.position.y = position[1] + hop * 0.28;
+    groupRef.current.rotation.y = -pathPhase;
+    groupRef.current.rotation.z = Math.sin(phase) * -0.08;
   });
 
   return (
