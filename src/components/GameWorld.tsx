@@ -47,6 +47,7 @@ type ForestPlantState = {
   used_wind: number;
   seed_level: number;
   seed_bought_at: string | null;
+  flowered_at: string | null;
   tree_exp: number;
 };
 
@@ -237,7 +238,7 @@ const GameWorld: React.FC = () => {
       let usersData: ForestPlantState[] = (forestData || []) as ForestPlantState[];
 
       if (profile?.id) {
-        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, tree_exp').eq('id', profile.id).single();
+        const { data: meData } = await supabase.from('users').select('id, name, plant_growth, class_id, plant_position_x, plant_position_z, item_water, item_sun, item_wind, used_water, used_sun, used_wind, seed_level, seed_bought_at, flowered_at, tree_exp').eq('id', profile.id).single();
         if (meData) {
           // meData를 가져오자마자 무조건 내 인벤토리를 업데이트!
           setMyInventory({ 
@@ -317,13 +318,14 @@ const GameWorld: React.FC = () => {
             isFlower,
             position: [user.plant_position_x, 0, user.plant_position_z] as [number, number, number],
             seedBoughtAt: user.seed_bought_at,
+            seedEndedAt: user.flowered_at,
             seedLevel: sLevel
           };
         }).filter(Boolean) as typeof studentsPlants;
 
         let archivedQuery = supabase
           .from('user_plants')
-          .select('id, user_id, owner_name, seed_level, plant_growth, used_water, used_sun, used_wind, plant_position_x, plant_position_z, seed_bought_at, created_at');
+          .select('id, user_id, owner_name, seed_level, plant_growth, used_water, used_sun, used_wind, plant_position_x, plant_position_z, seed_bought_at, flowered_at, created_at');
         // /world처럼 학급이 없는 공용 경로에서는 전체 꽃을 조회한다.
         // 이전에는 빈 문자열로 필터링해 보관된 꽃이 전부 누락됐다.
         if (classId) archivedQuery = archivedQuery.eq('class_id', classId);
@@ -340,7 +342,8 @@ const GameWorld: React.FC = () => {
           isFlower: true,
           position: [plant.plant_position_x, 0, plant.plant_position_z] as [number, number, number],
           seedBoughtAt: plant.seed_bought_at,
-          seedEndedAt: plant.created_at,
+          // 기존 꽃에는 flowered_at이 없을 수 있어 보관 시각을 임시 종료점으로 사용한다.
+          seedEndedAt: plant.flowered_at || plant.created_at,
           seedLevel: plant.seed_level,
         }));
         const allVisiblePlants = [...plants, ...archivedFlowers];
