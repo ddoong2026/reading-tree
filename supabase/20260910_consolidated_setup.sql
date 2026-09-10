@@ -92,7 +92,36 @@ language sql security definer set search_path=public as $$
     and (p_class_id is null or u.class_id = p_class_id);
 $$;
 
+-- 같은 반 친구의 식물을 눌렀을 때만 독서록을 읽는다. 일반 reading_logs 조회 권한은 유지한다.
+create or replace function public.get_forest_reading_logs(
+  p_owner_id uuid,
+  p_started_at timestamptz default null,
+  p_ended_at timestamptz default null
+)
+returns table (id uuid, book_title text, created_at timestamptz, image_url text, text_content text)
+language sql security definer set search_path=public as $$
+  select r.id, r.book_title, r.created_at, r.image_url, r.text_content
+  from public.reading_logs r
+  where r.user_id = p_owner_id
+    and auth.uid() is not null
+    and (
+      public.is_staff()
+      or exists (
+        select 1 from public.users viewer
+        join public.users owner on owner.id = p_owner_id
+        where viewer.id = auth.uid()
+          and viewer.class_id is not null
+          and viewer.class_id = owner.class_id
+      )
+    )
+    and (p_started_at is null or r.created_at >= p_started_at)
+    and (p_ended_at is null or r.created_at < p_ended_at)
+  order by r.created_at desc;
+$$;
+
 revoke all on function public.buy_item(text),public.buy_seed(),public.use_plant_item(text),public.plant_seed(real,real,text),public.buy_ecosystem_animal(text),public.reward_completed_quest(text) from public;
 grant execute on function public.buy_item(text),public.buy_seed(),public.use_plant_item(text),public.plant_seed(real,real,text),public.buy_ecosystem_animal(text),public.reward_completed_quest(text) to authenticated;
 revoke all on function public.get_forest_plant_states(text) from public;
 grant execute on function public.get_forest_plant_states(text) to authenticated;
+revoke all on function public.get_forest_reading_logs(uuid,timestamptz,timestamptz) from public;
+grant execute on function public.get_forest_reading_logs(uuid,timestamptz,timestamptz) to authenticated;

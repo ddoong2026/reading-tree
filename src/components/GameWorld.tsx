@@ -102,7 +102,7 @@ const GameWorld: React.FC = () => {
   const [treeExp, setTreeExp] = useState(0);
   const [treeNextExp, setTreeNextExp] = useState(10);
 
-  const [studentsPlants, setStudentsPlants] = useState<{ id: string, ownerId: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number], seedBoughtAt?: string | null, seedLevel: number }[]>([]);
+  const [studentsPlants, setStudentsPlants] = useState<{ id: string, ownerId: string, name: string, growth: number, usedWater: number, usedSun: number, usedWind: number, isFlower: boolean, position: [number, number, number], seedBoughtAt?: string | null, seedEndedAt?: string | null, seedLevel: number }[]>([]);
   const [forestAnimals, setForestAnimals] = useState<{ id: string; type: AnimalId; position: [number, number, number] }[]>([]);
 
   // 심기 모드 관련 상태
@@ -209,14 +209,17 @@ const GameWorld: React.FC = () => {
     const fetchLogs = async () => {
       setIsLogsLoading(true);
       const student = studentsPlants.find(p => p.id === selectedStudentId);
-      if (!student) return;
-      let q = supabase.from('reading_logs').select('*').eq('user_id', student.ownerId).order('created_at', { ascending: false });
-      
-      if (!showAllLogs && student && student.seedBoughtAt) {
-        q = q.gte('created_at', student.seedBoughtAt);
+      if (!student) {
+        setIsLogsLoading(false);
+        return;
       }
-      
-      const { data } = await q;
+      // 친구 독서록은 일반 테이블 권한을 열지 않고, 같은 반 식물 클릭용 RPC로만 읽는다.
+      const { data, error } = await supabase.rpc('get_forest_reading_logs', {
+        p_owner_id: student.ownerId,
+        p_started_at: showAllLogs ? null : (student.seedBoughtAt || null),
+        p_ended_at: showAllLogs ? null : (student.seedEndedAt || null),
+      });
+      if (error) console.error('독서록을 불러오지 못했습니다.', error);
       setSelectedStudentLogs(data || []);
       setIsLogsLoading(false);
     };
@@ -320,7 +323,7 @@ const GameWorld: React.FC = () => {
 
         let archivedQuery = supabase
           .from('user_plants')
-          .select('id, user_id, owner_name, seed_level, plant_growth, used_water, used_sun, used_wind, plant_position_x, plant_position_z, seed_bought_at');
+          .select('id, user_id, owner_name, seed_level, plant_growth, used_water, used_sun, used_wind, plant_position_x, plant_position_z, seed_bought_at, created_at');
         // /world처럼 학급이 없는 공용 경로에서는 전체 꽃을 조회한다.
         // 이전에는 빈 문자열로 필터링해 보관된 꽃이 전부 누락됐다.
         if (classId) archivedQuery = archivedQuery.eq('class_id', classId);
@@ -337,6 +340,7 @@ const GameWorld: React.FC = () => {
           isFlower: true,
           position: [plant.plant_position_x, 0, plant.plant_position_z] as [number, number, number],
           seedBoughtAt: plant.seed_bought_at,
+          seedEndedAt: plant.created_at,
           seedLevel: plant.seed_level,
         }));
         const allVisiblePlants = [...plants, ...archivedFlowers];
