@@ -61,10 +61,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
-  // 대기열 워커만 이 헤더로 인증할 수 있습니다. 브라우저 요청은 기존 로그인 검사를 거칩니다.
-  const queueWorker = Boolean(process.env.QUEUE_WORKER_SECRET && req.headers['x-queue-secret'] === process.env.QUEUE_WORKER_SECRET);
-  const actor = queueWorker ? null : await requireUser(req);
-  if (!queueWorker && !actor) return res.status(401).json({ error: 'Authentication is required.' });
+  const actor = await requireUser(req);
+  if (!actor) return res.status(401).json({ error: 'Authentication is required.' });
 
   // Vercel 환경에서는 VITE_ 접두사 없는 GEMINI_API_KEY를 Secret으로 사용합니다.
   const API_KEY = process.env.GEMINI_API_KEY;
@@ -223,7 +221,7 @@ annotations는 꼭 필요한 수정만 최대 5개 작성하세요. original은 
       return res.status(200).json({ text: response.text().trim() });
     
     } else if (action === 'checkModels') {
-      if (!actor || actor.role !== 'admin') return res.status(403).json({ error: 'Administrator access is required.' });
+      if (actor.role !== 'admin') return res.status(403).json({ error: 'Administrator access is required.' });
       try {
         // 백엔드에서 직접 모델 목록을 조회하여 API 키 정상 여부 확인
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);

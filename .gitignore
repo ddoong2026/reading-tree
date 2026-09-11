@@ -43,3 +43,4 @@ dist-ssr
 .env
 GEMINI.md
 .env.local
+.vercel

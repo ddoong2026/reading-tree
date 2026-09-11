@@ -1,7 +1,4 @@
 {
-  "crons": [
-    { "path": "/api/feedback-queue", "schedule": "* * * * *" }
-  ],
   "rewrites": [
     {
       "source": "/(.*)",
