@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { Trash2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface Student {
   id: string;
@@ -41,11 +42,21 @@ interface Feedback {
   user_id: string;
   content: string;
   created_at: string;
+  recipient: 'teacher_1' | 'teacher_2' | 'developer';
+  reply_content: string | null;
+  replied_at: string | null;
   users?: { name: string };
 }
 
+const RECIPIENT_LABELS: Record<Feedback['recipient'], string> = {
+  teacher_1: '1반 선생님',
+  teacher_2: '2반 선생님',
+  developer: '개발자',
+};
+
 const TeacherDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [schoolYear, setSchoolYear] = useState(new Date().getFullYear().toString());
   const [grade, setGrade] = useState('1');
   const [classNum, setClassNum] = useState('1');
@@ -55,11 +66,18 @@ const TeacherDashboard: React.FC = () => {
   const [batchPassword, setBatchPassword] = useState('123456');
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchLogs, setBatchLogs] = useState<string[]>([]);
+  const [teacherName, setTeacherName] = useState('');
+  const [teacherEmail, setTeacherEmail] = useState('');
+  const [teacherPassword, setTeacherPassword] = useState('');
+  const [teacherClassNumber, setTeacherClassNumber] = useState<'1' | '2'>('1');
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
 
   // 실 데이터 상태
   const [students, setStudents] = useState<Student[]>([]);
   const [allLogs, setAllLogs] = useState<ReadingLog[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [savingReplyId, setSavingReplyId] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -149,7 +167,7 @@ const TeacherDashboard: React.FC = () => {
     // 3. 학생 건의사항 가져오기
     const { data: feedbackData, error: feedbackError } = await supabase
       .from('student_feedbacks')
-      .select('id, user_id, content, created_at, users(name)')
+      .select('id, user_id, content, recipient, created_at, reply_content, replied_at, users(name)')
       .order('created_at', { ascending: false });
 
     if (feedbackError) console.error("Error fetching feedbacks:", feedbackError);
@@ -365,6 +383,63 @@ const TeacherDashboard: React.FC = () => {
     }
   };
 
+  const handleCreateTeacher = async () => {
+    if (!teacherName.trim() || !teacherEmail.trim() || teacherPassword.length < 8) {
+      alert('이름, 이메일, 8자 이상 비밀번호를 모두 입력해주세요.');
+      return;
+    }
+    setCreatingTeacher(true);
+    try {
+      await callAdmin({
+        action: 'createTeacher',
+        name: teacherName.trim(),
+        email: teacherEmail.trim(),
+        password: teacherPassword,
+        classId: `${schoolYear.trim()}-${grade.trim()}-${teacherClassNumber}`,
+      });
+      alert(`${teacherClassNumber}반 선생님 계정을 만들었습니다.`);
+      setTeacherName('');
+      setTeacherEmail('');
+      setTeacherPassword('');
+      fetchData();
+    } catch (error: any) {
+      alert('교사 계정 생성에 실패했습니다: ' + error.message);
+    } finally {
+      setCreatingTeacher(false);
+    }
+  };
+
+  const handleSaveReply = async (feedback: Feedback) => {
+    const reply = (replyDrafts[feedback.id] ?? feedback.reply_content ?? '').trim();
+    if (!reply) {
+      alert('답변 내용을 입력해주세요.');
+      return;
+    }
+    setSavingReplyId(feedback.id);
+    const { data, error } = await supabase
+      .from('student_feedbacks')
+      .update({ reply_content: reply, replied_at: new Date().toISOString() })
+      .eq('id', feedback.id)
+      .select('id, reply_content, replied_at')
+      .single();
+    setSavingReplyId(null);
+    if (error) {
+      alert('답변 저장에 실패했습니다: ' + error.message);
+      return;
+    }
+    setFeedbacks(previous => previous.map(item => item.id === feedback.id
+      ? { ...item, reply_content: data.reply_content, replied_at: data.replied_at }
+      : item));
+    setReplyDrafts(previous => ({ ...previous, [feedback.id]: data.reply_content || '' }));
+  };
+
+  const visibleFeedbacks = feedbacks.filter(feedback => {
+    if (profile?.role === 'admin') return true;
+    if (profile?.role !== 'teacher') return false;
+    const classNumber = profile.class_id?.match(/(?:^|-)([12])$/)?.[1];
+    return classNumber ? feedback.recipient === `teacher_${classNumber}` : false;
+  });
+
   const handleUpdatePlantStats = async (studentId: string, column: string, value: number) => {
     if (isNaN(value)) return;
     try {
@@ -494,6 +569,37 @@ const TeacherDashboard: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {profile?.role === 'admin' && (
+        <section className="bg-white p-6 rounded-2xl shadow-sm mb-8 border-l-4 border-indigo-500">
+          <h2 className="text-xl font-semibold text-gray-800">👩‍🏫 담당 교사 계정 만들기</h2>
+          <p className="text-sm text-gray-500 mt-1 mb-5">교사 계정은 선택한 반의 학생 건의만 받고 답장할 수 있습니다. 개발자용 계정은 기존 관리자 권한을 사용합니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">이름</label>
+              <input value={teacherName} onChange={(event) => setTeacherName(event.target.value)} placeholder="예: 김선생님" className="w-full px-3 py-2 border border-gray-200 rounded-lg" disabled={creatingTeacher} />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">로그인 이메일</label>
+              <input type="email" value={teacherEmail} onChange={(event) => setTeacherEmail(event.target.value)} placeholder="teacher@school.kr" className="w-full px-3 py-2 border border-gray-200 rounded-lg" disabled={creatingTeacher} />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">초기 비밀번호</label>
+              <input type="password" value={teacherPassword} onChange={(event) => setTeacherPassword(event.target.value)} placeholder="8자 이상" className="w-full px-3 py-2 border border-gray-200 rounded-lg" disabled={creatingTeacher} />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">담당 반</label>
+              <select value={teacherClassNumber} onChange={(event) => setTeacherClassNumber(event.target.value as '1' | '2')} className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white" disabled={creatingTeacher}>
+                <option value="1">{grade}학년 1반</option>
+                <option value="2">{grade}학년 2반</option>
+              </select>
+            </div>
+            <button onClick={handleCreateTeacher} disabled={creatingTeacher} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg disabled:opacity-50">
+              {creatingTeacher ? '생성 중...' : '교사 계정 생성'}
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
         {/* 학생 계정 일괄 생성 섹션 */}
@@ -973,20 +1079,42 @@ const TeacherDashboard: React.FC = () => {
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {feedbacks.length === 0 ? (
+          {visibleFeedbacks.length === 0 ? (
             <div className="col-span-1 md:col-span-2 text-center py-8 text-gray-500 italic bg-gray-50 rounded-xl">
-              아직 등록된 건의사항이 없습니다.
+              확인할 쪽지가 없습니다.
             </div>
           ) : (
-            feedbacks.map(f => (
+            visibleFeedbacks.map(f => (
               <div key={f.id} className="bg-gray-50 p-5 rounded-xl border border-gray-100 relative group">
                 <div className="flex justify-between items-start mb-2">
-                  <span className="font-bold text-gray-800">{f.users?.name || '알 수 없음'}</span>
+                  <div>
+                    <span className="font-bold text-gray-800">{f.users?.name || '알 수 없음'}</span>
+                    <span className="ml-2 px-2 py-0.5 text-xs font-bold rounded-full bg-indigo-100 text-indigo-700">{RECIPIENT_LABELS[f.recipient]}</span>
+                  </div>
                   <span className="text-xs text-gray-400">
                     {new Date(f.created_at).toLocaleString('ko-KR')}
                   </span>
                 </div>
                 <p className="text-gray-700 whitespace-pre-wrap text-sm">{f.content}</p>
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <label className="block text-sm font-bold text-indigo-700 mb-2">✉️ 학생에게 답장하기</label>
+                  <textarea
+                    value={replyDrafts[f.id] ?? f.reply_content ?? ''}
+                    onChange={(event) => setReplyDrafts(previous => ({ ...previous, [f.id]: event.target.value }))}
+                    placeholder="학생이 쪽지함에서 볼 답변을 적어주세요."
+                    className="w-full min-h-24 p-3 border border-indigo-100 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className="text-xs text-gray-400">{f.replied_at ? `마지막 답변: ${new Date(f.replied_at).toLocaleString('ko-KR')}` : '아직 답변하지 않았습니다.'}</span>
+                    <button
+                      onClick={() => handleSaveReply(f)}
+                      disabled={savingReplyId === f.id}
+                      className="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:opacity-50"
+                    >
+                      {savingReplyId === f.id ? '저장 중...' : f.reply_content ? '답변 수정' : '답변 보내기'}
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={() => handleDeleteFeedback(f.id)}
                   className="absolute top-4 right-4 p-1.5 text-gray-300 hover:text-red-500 bg-white rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"

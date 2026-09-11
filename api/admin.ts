@@ -20,6 +20,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       return res.status(201).json({ id: data.user.id });
     }
+    if (action === 'createTeacher') {
+      if (actor.role !== 'admin') return res.status(403).json({ error: 'Administrator access is required.' });
+      const { email, password, name, classId } = req.body;
+      if (typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email) || typeof password !== 'string' || password.length < 8 || typeof name !== 'string' || !name.trim() || !/^\d{4,}-\d+-[12]$/.test(classId)) {
+        return res.status(400).json({ error: 'Invalid teacher account data.' });
+      }
+      const { data, error } = await admin.auth.admin.createUser({ email: email.trim(), password, email_confirm: true });
+      if (error) throw error;
+      const { error: profileError } = await admin.from('users').insert({ id: data.user.id, role: 'teacher', name: name.trim(), class_id: classId });
+      if (profileError) {
+        await admin.auth.admin.deleteUser(data.user.id);
+        throw profileError;
+      }
+      return res.status(201).json({ id: data.user.id });
+    }
     if (action === 'updateStudent') {
       const { studentId, classId, groupCode, seedLevel, treeExp } = req.body;
       if (typeof studentId !== 'string') return res.status(400).json({ error: 'Invalid student id.' });

@@ -34,6 +34,26 @@ interface UserStats {
   animal_coins: number;
 }
 
+type FeedbackRecipient = 'teacher_1' | 'teacher_2' | 'developer';
+
+interface FeedbackMessage {
+  id: string;
+  content: string;
+  recipient: FeedbackRecipient;
+  created_at: string;
+  reply_content: string | null;
+  replied_at: string | null;
+}
+
+type ClassAnimalFund = { collected_coins: number; target_coins: number };
+type ClassAnimalFunds = Partial<Record<AnimalId, ClassAnimalFund>>;
+
+const RECIPIENT_LABELS: Record<FeedbackRecipient, string> = {
+  teacher_1: '1반 선생님',
+  teacher_2: '2반 선생님',
+  developer: '개발자',
+};
+
 const StudentDashboard: React.FC = () => {
   const { user, profile } = useAuth();
   const { studentId } = useParams<{ studentId?: string }>();
@@ -45,10 +65,15 @@ const StudentDashboard: React.FC = () => {
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   const [userStats, setUserStats] = useState<UserStats>({ points: 0, item_water: 0, item_sun: 0, item_wind: 0, plant_growth: 0, class_id: null, seed_level: 1, used_water: 0, used_sun: 0, used_wind: 0, rabbit_count: 0, animal_coins: 0 });
   const [ownedAnimals, setOwnedAnimals] = useState<AnimalId[]>([]);
+  const [classAnimalFunds, setClassAnimalFunds] = useState<ClassAnimalFunds>({});
+  const [contributingAnimalId, setContributingAnimalId] = useState<AnimalId | null>(null);
 
   // 건의사항 관련 상태
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [isMailboxOpen, setIsMailboxOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackRecipient, setFeedbackRecipient] = useState<FeedbackRecipient>('teacher_1');
+  const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([]);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
   // 퀘스트 및 룰렛 관련 상태
@@ -114,6 +139,43 @@ const StudentDashboard: React.FC = () => {
     if (!targetUserId) return;
     supabase.from('user_animals').select('animal_type').eq('user_id', targetUserId).then(({ data }) => setOwnedAnimals((data || []).map((animal) => animal.animal_type as AnimalId)));
   }, [targetUserId]);
+
+  useEffect(() => {
+    if (!userStats.class_id || isTeacherView) {
+      setClassAnimalFunds({});
+      return;
+    }
+    const loadClassAnimalFunds = async () => {
+      const { data, error } = await supabase
+        .from('class_animal_funds')
+        .select('animal_type, collected_coins, target_coins')
+        .eq('class_id', userStats.class_id);
+      if (error) {
+        console.error('Error fetching class animal fund status:', error);
+        return;
+      }
+      const funds = ((data || []) as { animal_type: AnimalId; collected_coins: number; target_coins: number }[]).reduce<ClassAnimalFunds>((result, fund) => {
+        result[fund.animal_type] = { collected_coins: fund.collected_coins, target_coins: fund.target_coins };
+        return result;
+      }, {});
+      setClassAnimalFunds(funds);
+    };
+    loadClassAnimalFunds();
+  }, [userStats.class_id, isTeacherView]);
+
+  useEffect(() => {
+    if (!user?.id || isTeacherView) return;
+    const loadFeedbackMessages = async () => {
+      const { data, error } = await supabase
+        .from('student_feedbacks')
+        .select('id, content, recipient, created_at, reply_content, replied_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (error) console.error('Error fetching messages:', error);
+      else setFeedbackMessages((data as FeedbackMessage[]) || []);
+    };
+    loadFeedbackMessages();
+  }, [user?.id, isTeacherView]);
 
   const handleDelete = async (id: string, title: string) => {
     if (!window.confirm(`'${title}' 독서록을 정말 삭제하시겠습니까?`)) return;
@@ -231,6 +293,23 @@ const StudentDashboard: React.FC = () => {
     alert(`${animal.name} 친구가 숲에 왔어요!`);
   };
 
+  const handleContributeToAnimalFund = async (animal: typeof ANIMALS[number]) => {
+    if (userStats.animal_coins < 1) {
+      alert('공동구매에 보탤 동물 코인이 없어요. 독서 퀘스트를 완료해 코인을 모아보세요!');
+      return;
+    }
+    setContributingAnimalId(animal.id);
+    const { data, error } = await supabase.rpc('contribute_to_class_animal_fund', { p_animal: animal.id, p_amount: 1 });
+    setContributingAnimalId(null);
+    if (error || !data?.[0]) {
+      alert(`공동구매 참여에 실패했습니다: ${error?.message || '모금 현황을 확인해주세요.'}`);
+      return;
+    }
+    const result = data[0] as { animal_coins: number; collected_coins: number; target_coins: number };
+    setUserStats(prev => ({ ...prev, animal_coins: result.animal_coins }));
+    setClassAnimalFunds(prev => ({ ...prev, [animal.id]: { collected_coins: result.collected_coins, target_coins: result.target_coins } }));
+  };
+
 
 
   const handleSubmitFeedback = async () => {
@@ -239,14 +318,20 @@ const StudentDashboard: React.FC = () => {
     
     try {
       const { error } = await supabase.from('student_feedbacks').insert([
-        { user_id: targetUserId, content: feedbackText.trim() }
+        { user_id: user?.id, content: feedbackText.trim(), recipient: feedbackRecipient }
       ]);
       
       if (error) throw error;
       
-      alert("의견이 성공적으로 전달되었습니다! 선생님과 개발자가 참고할게요.");
+      alert(`${RECIPIENT_LABELS[feedbackRecipient]}께 쪽지를 보냈어요.`);
       setIsFeedbackModalOpen(false);
       setFeedbackText('');
+      const { data } = await supabase
+        .from('student_feedbacks')
+        .select('id, content, recipient, created_at, reply_content, replied_at')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+      setFeedbackMessages((data as FeedbackMessage[]) || []);
     } catch (err: any) {
       console.error(err);
       alert("건의사항 제출에 실패했습니다: " + err.message);
@@ -340,6 +425,12 @@ const StudentDashboard: React.FC = () => {
           <Link to="/teacher" className="text-blue-600 hover:underline font-bold mt-2">교사 대시보드로 돌아가기</Link>
         ) : (
           <div className="flex gap-4">
+            <button
+              onClick={() => setIsMailboxOpen(true)}
+              className="px-4 py-2 bg-rose-100 text-rose-700 rounded-lg font-bold shadow-sm hover:bg-rose-200 transition-colors"
+            >
+              💌 내 쪽지함{feedbackMessages.some(message => message.reply_content) ? ' ✨' : ''}
+            </button>
             <button 
               onClick={() => setIsFeedbackModalOpen(true)}
               className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold shadow-sm hover:bg-indigo-200 transition-colors"
@@ -554,6 +645,39 @@ const StudentDashboard: React.FC = () => {
               </div>
             </div>
             <p className="text-sm text-amber-700 mb-4 font-medium">독서록을 쓰고 모은 포인트로 식물 아이템과 숲 친구를 사보세요!</p>
+            {!isTeacherView && userStats.class_id && (
+              <section className="mb-4 rounded-xl border border-lime-200 bg-lime-50 p-3">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h3 className="font-bold text-lime-800">🤝 우리 반 동물 공동구매 현황</h3>
+                  <span className="text-xs text-lime-700">동물 코인 모금액</span>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {ANIMALS.map(animal => {
+                    const fund = classAnimalFunds[animal.id];
+                    const collected = fund?.collected_coins || 0;
+                    const target = fund?.target_coins || animal.price;
+                    const isComplete = collected >= target;
+                    return (
+                    <div key={animal.id} className="rounded-lg bg-white border border-lime-100 px-2 py-2 text-center">
+                      <span className="block text-xl" aria-hidden>{animal.emoji}</span>
+                      <span className="block text-xs font-bold text-gray-700">{animal.name}</span>
+                      <span className={`block text-xs mt-0.5 font-bold ${isComplete ? 'text-green-600' : 'text-lime-700'}`}>{collected} / {target} 코인</span>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-lime-100 overflow-hidden">
+                        <div className="h-full bg-lime-500" style={{ width: `${Math.min(100, (collected / target) * 100)}%` }} />
+                      </div>
+                      <button
+                        onClick={() => handleContributeToAnimalFund(animal)}
+                        disabled={isComplete || contributingAnimalId !== null || userStats.animal_coins < 1}
+                        className="mt-2 w-full rounded-md bg-lime-600 hover:bg-lime-700 text-white text-[11px] font-bold py-1 disabled:bg-gray-300"
+                      >
+                        {contributingAnimalId === animal.id ? '보태는 중' : isComplete ? '모금 완료' : '+1 코인'}
+                      </button>
+                    </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             
             <div className="grid grid-cols-4 gap-2">
               <button 
@@ -715,8 +839,20 @@ const StudentDashboard: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-800 mb-2">💌 개발자/선생님께 건의하기</h2>
             <p className="text-gray-500 text-sm mb-6">
               앱을 사용하면서 불편했던 점, 추가되었으면 하는 기능, 혹은 하고 싶은 말을 자유롭게 남겨주세요.
-              <br/>작성한 내용은 선생님과 관리자만 볼 수 있습니다.
+              <br/>받는 사람을 선택하면 쪽지로 전달되고, 답변은 내 쪽지함에서 확인할 수 있어요.
             </p>
+
+            <label className="block text-sm font-bold text-gray-700 mb-2" htmlFor="feedback-recipient">받는 사람</label>
+            <select
+              id="feedback-recipient"
+              value={feedbackRecipient}
+              onChange={(e) => setFeedbackRecipient(e.target.value as FeedbackRecipient)}
+              className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white mb-4"
+            >
+              {(Object.entries(RECIPIENT_LABELS) as [FeedbackRecipient, string][]).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
 
             <textarea
               value={feedbackText}
@@ -741,6 +877,40 @@ const StudentDashboard: React.FC = () => {
                 {isSubmittingFeedback ? '전송 중...' : '전송하기'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isMailboxOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-5">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">💌 내 쪽지함</h2>
+                <p className="text-sm text-gray-500 mt-1">보낸 건의와 받은 답변을 확인하세요.</p>
+              </div>
+              <button onClick={() => setIsMailboxOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl" aria-label="쪽지함 닫기">×</button>
+            </div>
+            {feedbackMessages.length === 0 ? (
+              <p className="py-10 text-center text-gray-500 bg-gray-50 rounded-xl">보낸 쪽지가 아직 없어요.</p>
+            ) : feedbackMessages.map(message => (
+              <article key={message.id} className="border border-rose-100 rounded-2xl p-4 mb-4 bg-rose-50/40">
+                <div className="flex justify-between gap-3 text-sm mb-3">
+                  <span className="font-bold text-rose-700">받는 사람: {RECIPIENT_LABELS[message.recipient]}</span>
+                  <time className="text-gray-400">{new Date(message.created_at).toLocaleString('ko-KR')}</time>
+                </div>
+                <p className="whitespace-pre-wrap text-gray-700">{message.content}</p>
+                <div className="mt-4 rounded-xl bg-white border border-indigo-100 p-4">
+                  <p className="text-sm font-bold text-indigo-700 mb-2">✉️ 답장</p>
+                  {message.reply_content ? (
+                    <>
+                      <p className="whitespace-pre-wrap text-gray-700">{message.reply_content}</p>
+                      {message.replied_at && <time className="block mt-2 text-xs text-gray-400">{new Date(message.replied_at).toLocaleString('ko-KR')}</time>}
+                    </>
+                  ) : <p className="text-sm text-gray-500">아직 답변을 기다리고 있어요.</p>}
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       )}
