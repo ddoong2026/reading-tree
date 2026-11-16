@@ -75,6 +75,11 @@ const StudentDashboard: React.FC = () => {
   const [feedbackRecipient, setFeedbackRecipient] = useState<FeedbackRecipient>('teacher_1');
   const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([]);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // 퀘스트 및 룰렛 관련 상태
   const [questCategoryId, setQuestCategoryId] = useState<string | null>(null);
@@ -279,6 +284,31 @@ const StudentDashboard: React.FC = () => {
     setUserStats(prev => ({ ...prev, points: data.points, [dbColumn]: data[dbColumn] }));
   };
 
+  const handleChangePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordError('');
+    if (newPassword.length < 8) {
+      setPasswordError('비밀번호는 8자 이상으로 입력해주세요.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('새 비밀번호가 서로 다릅니다.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setIsChangingPassword(false);
+    if (error) {
+      setPasswordError(`비밀번호 변경에 실패했어요: ${error.message}`);
+      return;
+    }
+    setNewPassword('');
+    setConfirmPassword('');
+    setIsPasswordModalOpen(false);
+    alert('비밀번호가 변경되었어요. 다음 로그인부터 새 비밀번호를 사용하세요.');
+  };
+
   const handleBuyAnimal = async (animal: typeof ANIMALS[number]) => {
     if (userStats.animal_coins < animal.price) { alert(`${animal.name} 친구를 맞이하려면 동물 코인 ${animal.price}개가 필요해요.`); return; }
     if (!window.confirm(`${animal.price} 포인트로 ${animal.name} 친구를 맞이하시겠습니까?`)) return;
@@ -425,6 +455,12 @@ const StudentDashboard: React.FC = () => {
           <Link to="/teacher" className="text-blue-600 hover:underline font-bold mt-2">교사 대시보드로 돌아가기</Link>
         ) : (
           <div className="flex gap-4">
+            <button
+              onClick={() => { setPasswordError(''); setIsPasswordModalOpen(true); }}
+              className="px-4 py-2 bg-amber-100 text-amber-800 rounded-lg font-bold shadow-sm hover:bg-amber-200 transition-colors"
+            >
+              🔒 비밀번호 변경
+            </button>
             <button
               onClick={() => setIsMailboxOpen(true)}
               className="px-4 py-2 bg-rose-100 text-rose-700 rounded-lg font-bold shadow-sm hover:bg-rose-200 transition-colors"
@@ -912,6 +948,49 @@ const StudentDashboard: React.FC = () => {
               </article>
             ))}
           </div>
+        </div>
+      )}
+
+      {isPasswordModalOpen && !isTeacherView && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleChangePassword} className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 shadow-xl">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-2xl font-bold text-gray-800">🔒 비밀번호 변경</h2>
+              <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl" aria-label="비밀번호 변경 닫기">×</button>
+            </div>
+            <p className="text-sm text-gray-500 mb-5">새 비밀번호는 8자 이상으로 정해주세요.</p>
+
+            {passwordError && <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{passwordError}</p>}
+
+            <label className="block text-sm font-bold text-gray-700 mb-2" htmlFor="new-password">새 비밀번호</label>
+            <input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 mb-4"
+              required
+              minLength={8}
+            />
+            <label className="block text-sm font-bold text-gray-700 mb-2" htmlFor="confirm-password">새 비밀번호 확인</label>
+            <input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400"
+              required
+              minLength={8}
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button type="button" onClick={() => setIsPasswordModalOpen(false)} disabled={isChangingPassword} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl">취소</button>
+              <button type="submit" disabled={isChangingPassword} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl disabled:opacity-50">
+                {isChangingPassword ? '변경 중...' : '변경하기'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

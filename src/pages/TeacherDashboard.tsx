@@ -63,7 +63,7 @@ const TeacherDashboard: React.FC = () => {
   const [endNumber, setEndNumber] = useState('30');
   const [missingNumbers, setMissingNumbers] = useState('');
   
-  const [batchPassword, setBatchPassword] = useState('123456');
+  const [batchPassword, setBatchPassword] = useState('12345678');
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchLogs, setBatchLogs] = useState<string[]>([]);
   const [teacherName, setTeacherName] = useState('');
@@ -242,8 +242,8 @@ const TeacherDashboard: React.FC = () => {
       alert("끝 번호를 올바르게 입력해주세요.");
       return;
     }
-    if (batchPassword.length < 6) {
-      alert("비밀번호는 최소 6자리 이상이어야 합니다.");
+    if (batchPassword.length < 8) {
+      alert("비밀번호는 최소 8자리 이상이어야 합니다.");
       return;
     }
 
@@ -671,8 +671,9 @@ const TeacherDashboard: React.FC = () => {
             <div className="border-t border-gray-100 pt-5 mt-2 flex items-end gap-4">
               <div className="flex-1">
                 <label className="block text-sm font-bold text-gray-700 mb-1">초기 비밀번호</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
+                  placeholder="8자 이상"
                   value={batchPassword}
                   onChange={(e) => setBatchPassword(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"

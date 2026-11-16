@@ -12,13 +12,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { email, password, name, studentNumber, classId } = req.body;
       if (!/^s_\d+@dokseo\.app$/.test(email) || typeof password !== 'string' || password.length < 8 || !Number.isInteger(studentNumber)) return res.status(400).json({ error: 'Invalid student account data.' });
       const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-      if (error) throw error;
-      const { error: profileError } = await admin.from('users').insert({ id: data.user.id, role: 'student', name, student_number: studentNumber, class_id: classId });
+      let userId: string;
+      if (error) {
+        if (error.code !== 'email_exists') throw error;
+        const { data: listData, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (listError) throw listError;
+        const existing = listData.users.find((u) => u.email === email);
+        if (!existing) throw error;
+        userId = existing.id;
+      } else {
+        userId = data.user.id;
+      }
+      const { error: profileError } = await admin.from('users').upsert({ id: userId, role: 'student', name, student_number: studentNumber, class_id: classId });
       if (profileError) {
-        await admin.auth.admin.deleteUser(data.user.id);
+        if (!error) await admin.auth.admin.deleteUser(userId);
         throw profileError;
       }
-      return res.status(201).json({ id: data.user.id });
+      return res.status(201).json({ id: userId });
     }
     if (action === 'createTeacher') {
       if (actor.role !== 'admin') return res.status(403).json({ error: 'Administrator access is required.' });
